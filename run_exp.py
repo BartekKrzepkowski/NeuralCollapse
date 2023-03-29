@@ -2,8 +2,8 @@
 import numpy as np
 import torch
 
-from rich.traceback import install
-install(show_locals=True)
+# from rich.traceback import install
+# install(show_locals=True)
 
 from src.utils.prepare import prepare_model, prepare_loaders, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
@@ -27,8 +27,9 @@ def objective(lr_worse, lr_better, step, epochs):
     GRAD_ACCUM_STEPS = 1
     CLIP_VALUE = 0.0
     FP = 0.0
-    EXP_NAME = f'sgd_cifar10_cnn_depth_{2}_fp_{FP}_worselr_{lr_worse}_betterlr_{lr_better}'
+    EXP_NAME = f'sgd_cifar10_cnn_depth_{2}_fp_{FP}_worselr_{lr_worse}_betterlr_{lr_better}_step_{step}'
     PROJECT_NAME = 'Critical_Periods_lr'
+    ENTITY = 'ideas_cv'
 
     # prepare params
     type_names = {
@@ -43,7 +44,7 @@ def objective(lr_worse, lr_better, step, epochs):
         'criterion': {'model': None, 'general_criterion_name': 'ce', 'num_classes': NUM_CLASSES,
                       'whether_record_trace': True, 'fpw': FP},
         'dataset': {'dataset_path': None, 'whether_aug': False},
-        'loaders': {'batch_size': 256, 'pin_memory': True, 'num_workers': 4},
+        'loaders': {'batch_size': 256, 'pin_memory': True, 'num_workers': 8},
         'optim': {'lr': lr_worse, 'momentum': 0.9, 'weight_decay': 0.0},
         'scheduler': {'eta_min': 1e-6, 'T_max': None},
         'type_names': type_names
@@ -84,7 +85,7 @@ def objective(lr_worse, lr_better, step, epochs):
         clip_value=CLIP_VALUE,
         base_path='reports',
         exp_name=EXP_NAME,
-        logger_config={'logger_name': 'tensorboard', 'project_name': PROJECT_NAME, 'entity': 'ideas_cv',
+        logger_config={'logger_name': 'tensorboard', 'project_name': PROJECT_NAME, 'entity': ENTITY,
                        'hyperparameters': h_params_overall, 'whether_use_wandb': True,
                        'layout': ee_tensorboard_layout(params_names), 'mode': 'online'
                        },
