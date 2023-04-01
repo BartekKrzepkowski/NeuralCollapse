@@ -34,14 +34,20 @@ def get_cifar10(dataset_path, whether_aug=True, proper_normalization=True):
         transforms.Normalize(mean, std),
         transforms.RandomErasing(p=0.1),
     ])
-    transform_train = transform_train if whether_aug else transform_eval
+    transform_train_2 = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.RandomAffine(degrees=0, translate=(1/8, 1/8)),
+        # transforms.RandomHorizontalFlip(),
+        transforms.Normalize(mean, std),
+    ])
+    transform_train = transform_train_2 if whether_aug else transform_eval
     train_data = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_train)
     train_eval_data = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_eval)
     test_data = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_eval)
     return train_data, train_eval_data, test_data
 
 
-def get_cifar100(dataset_path, proper_normalization=True):
+def get_cifar100(dataset_path, whether_aug=True, proper_normalization=True):
     dataset_path = dataset_path if dataset_path is not None else os.environ['CIFAR100_PATH']
     if proper_normalization:
         mean, std = (0.5071, 0.4865, 0.4409), (0.267, 0.256, 0.276)
@@ -57,6 +63,12 @@ def get_cifar100(dataset_path, proper_normalization=True):
         transforms.Normalize(mean, std),
         transforms.RandomErasing(p=0.1),
     ])
+    transform_train_2 = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.RandomAffine(degrees=0, translate=(1/8, 1/8)),
+        transforms.Normalize(mean, std),
+    ])
+    transform_train = transform_train_2 if whether_aug else transform_eval
     train_data = datasets.CIFAR100(dataset_path, train=True, download=DOWNLOAD, transform=transform_train)
     train_eval_data = datasets.CIFAR100(dataset_path, train=True, download=DOWNLOAD, transform=transform_eval)
     test_data = datasets.CIFAR100(dataset_path, train=False, download=DOWNLOAD, transform=transform_eval)
@@ -141,12 +153,12 @@ def get_cubbirds(proper_normalization=False):
     return train_data, train_eval_data, test_data
 
 
-def get_food101(proper_normalization=False):
+def get_food101(dataset_path, whether_aug=True, proper_normalization=True):
+    dataset_path = dataset_path if dataset_path is not None else os.environ['CIFAR100_PATH']
     if proper_normalization:
-        raise NotImplementedError()
+        mean, std = (0.485,0.456,0.406), (0.229,0.224,0.225)
     else:
         mean, std = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
-    dataset_path = os.environ['FOOD101_PATH']
     transform_eval = transforms.Compose([
         transforms.Resize(150, interpolation=InterpolationMode.BILINEAR),
         transforms.CenterCrop(128),
@@ -160,6 +172,15 @@ def get_food101(proper_normalization=False):
         transforms.Normalize(mean, std),
         transforms.RandomErasing(p=0.1),
     ])
+    transform_train_2 = transforms.Compose([
+        transforms.Resize(140, interpolation=InterpolationMode.BILINEAR),
+        transforms.CenterCrop(128),
+        transforms.ToTensor(),
+        transforms.RandomAffine(degrees=0, translate=(1/64, 1/64)),
+        # transforms.RandomHorizontalFlip(),
+        transforms.Normalize(mean, std),
+    ])
+    transform_train = transform_train_2 if whether_aug else transform_eval
     train_data = datasets.Food101(dataset_path, split='train', transform=transform_train)
     train_eval_data = datasets.Food101(dataset_path, split='train', transform=transform_eval)
     test_data = datasets.Food101(dataset_path, split='test', transform=transform_eval)

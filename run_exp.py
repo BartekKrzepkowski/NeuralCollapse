@@ -101,4 +101,4 @@ def objective(lr_worse, lr_better, step, epochs):
 if __name__ == "__main__":
     EPOCHS = 200
     for step in np.linspace(0, EPOCHS // 2, 5):
-        objective(1e-4, 5e-2, int(step), EPOCHS)
+        objective(1e-3, 1e-2, int(step), EPOCHS)

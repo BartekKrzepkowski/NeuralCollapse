@@ -1,3 +1,5 @@
+import math
+
 import torch
 
 
@@ -11,6 +13,14 @@ def prepare_evaluators(y_pred, y_true, loss):
     acc = acc_metric(y_pred, y_true)
     evaluators = {'loss': loss.item(), 'acc': acc}
     return evaluators
+
+
+def model_gradient_norm(model):
+    norm = 0.0
+    for param in model.parameters():
+        if param.requires_grad and param.grad is not None:
+            norm += (param.grad ** 2).sum().item()
+    return norm
 
 
 class CosineAlignments:
@@ -41,4 +51,5 @@ class CosineAlignments:
             gs.append(g)
             self.model.zero_grad()
         return gs
+        
 

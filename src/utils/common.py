@@ -1,7 +1,7 @@
 import torch
 
-from src.data.datasets import get_mnist, get_cifar10, get_cifar100, get_tinyimagenet
-from src.modules.losses import ClassificationLoss, FisherPenaltyLoss
+from src.data.datasets import get_mnist, get_cifar10, get_cifar100, get_tinyimagenet, get_food101
+from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmaxLoss
 from src.modules.architectures.models import MLP, SimpleCNN, MLPwithNorm, SimpleCNNwithNorm
 from src.modules.architectures.resnets import ResNet18, ResNet34
 from src.visualization.clearml_logger import ClearMLLogger
@@ -20,7 +20,8 @@ DATASET_NAME_MAP = {
     'mnist': get_mnist,
     'cifar10': get_cifar10,
     'cifar100': get_cifar100,
-    'tinyimagenet': get_tinyimagenet
+    'tinyimagenet': get_tinyimagenet,
+    'food101': get_food101,
 }
 
 LOGGERS_NAME_MAP = {
@@ -34,6 +35,7 @@ LOSS_NAME_MAP = {
     'cls': ClassificationLoss,
     'nll': torch.nn.NLLLoss,
     'mse': torch.nn.MSELoss,
+    'mse_softmax': MSESoftmaxLoss,
     'fp': FisherPenaltyLoss
 }
 
