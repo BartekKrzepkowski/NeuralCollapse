@@ -1,12 +1,10 @@
 import math
-from copy import deepcopy
 
 import torch
 
 from src.modules.metrics import acc_metric
 from src.modules.regularizers import FisherPenaly, BatchGradCovariancePenalty
 from src.utils import common
-from src.utils.utils_regularizers import distance_between_models
 
 
 class ClassificationLoss(torch.nn.Module):
@@ -27,7 +25,6 @@ class ClassificationLoss(torch.nn.Module):
 class FisherPenaltyLoss(torch.nn.Module):
     def __init__(self, model, general_criterion_name, num_classes, whether_record_trace=False, fpw=0.0):
         super().__init__()
-        self.model_zero = deepcopy(model)
         self.criterion = ClassificationLoss(common.LOSS_NAME_MAP[general_criterion_name]())
         self.regularizer = FisherPenaly(model, common.LOSS_NAME_MAP[general_criterion_name](), num_classes)
         self.whether_record_trace = whether_record_trace
@@ -35,8 +32,6 @@ class FisherPenaltyLoss(torch.nn.Module):
         #przygotowanie do logowania co n kroków
         self.overall_trace_buffer = None
         self.traces = None
-        self.trajectory_length_stochastic_squared = 0.0
-        self.lr = 0.1
 
     def forward(self, y_pred, y_true):
         traces = {}
@@ -44,10 +39,6 @@ class FisherPenaltyLoss(torch.nn.Module):
         if self.whether_record_trace:# and self.regularizer.model.training:
             overall_trace, traces = self.regularizer(y_pred)
             evaluators['overall_trace'] = overall_trace.item()
-            evaluators['distance_from_initialization_l2_squared'] = distance_between_models(self.model_zero, self.regularizer.model, 'l2')
-            # evaluators['distance_from_initialization_cosine'] = distance_between_models(self.model_zero, self.regularizer.model, 'cosine')
-            self.trajectory_length_stochastic_squared += self.lr ** 2 * overall_trace.item()
-            evaluators['trajectory_length_stochastic_squared'] = self.trajectory_length_stochastic_squared
             if self.fpw > 0:
                 loss += self.fpw * overall_trace
         return loss, evaluators, traces

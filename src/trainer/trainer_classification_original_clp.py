@@ -4,8 +4,9 @@ from typing import Dict
 import torch
 from tqdm import tqdm, trange
 
-from src.utils.common import LOGGERS_NAME_MAP
+from src.data.loaders import Loaders
 from src.modules.metrics import BatchVariance
+from src.utils.common import LOGGERS_NAME_MAP
 from src.utils.utils_trainer import adjust_evaluators, adjust_evaluators_pre_log, create_paths, save_model
 from src.utils.utils_optim import clip_grad_norm
 
@@ -27,21 +28,22 @@ class TrainerClassification:
         self.batch_variance = BatchVariance(model, optim)
 
     def run_exp1(self, config):
+        batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
+        num_workers = config.logger_config['hyperparameters']['loaders']['num_workers']
+        dataset_name = config.logger_config['hyperparameters']['type_names']['dataset']
+        self.train_loader = Loaders(dataset_name=dataset_name)
+        
         self.manual_seed(config)
         self.at_exp_start(config)
 
         if config.extra['window'] != 0:
             print('Entering deficit phase!!!')
-            for g in self.optim.param_groups:
-                g['lr'] = config.extra['lr_former']
+            self.loaders['train'] = self.train_loader.get_blurred_loader(batch_size, is_train=True, num_workers=num_workers)
             self.run_loop(0, config.extra['window'], config)
-
-            for g in self.optim.param_groups:
-                g['lr'] = config.extra['lr_latter']
-            # self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=config.extra['lr_former']/config.extra['lr_latter'], total_iters=config.extra['scheduler_climbing_steps'])
             print('Leaving deficit phase!!!')
 
         self.criterion.fpw = 0.0
+        self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
         self.run_loop(config.extra['window'], config.extra['window'] + config.epoch_end_at, config)
 
         self.logger.close()
@@ -49,27 +51,26 @@ class TrainerClassification:
 
 
     def run_exp2(self, config):
+        batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
+        num_workers = config.logger_config['hyperparameters']['loaders']['num_workers']
+        dataset_name = config.logger_config['hyperparameters']['type_names']['dataset']
+        self.train_loader = Loaders(dataset_name=dataset_name)
+
         self.manual_seed(config)
         self.at_exp_start(config)
 
         if config.extra['window'] != 0:
             fpw = self.criterion.fpw = 0.0
             self.criterion.fpw = 0.0
+            self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
             self.run_loop(0, config.extra['window'], config)
             self.criterion.fpw = fpw
-            self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=1.0, end_factor=config.extra['lr_former']/config.extra['lr_latter'], total_iters=config.extra['scheduler_climbing_steps'])
-        else:
-            for g in self.optim.param_groups:
-                g['lr'] = config.extra['lr_former']
 
-        self.run_loop(config.extra['window'], config.extra['window'] + config.extra['static_window'], config)
-
-        for g in self.optim.param_groups:
-                g['lr'] = config.extra['lr_latter']
-        self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=config.extra['lr_former']/config.extra['lr_latter'], total_iters=config.extra['scheduler_climbing_steps'])
-
+        self.loaders['train'] = self.train_loader.get_blurred_loader(batch_size, is_train=True, num_workers=num_workers)
+        self.run_loop(config.extra['window'], config.extra['window'] + 40, config)
         self.criterion.fpw = 0.0
-        self.run_loop(config.extra['window'] + config.extra['static_window'], config.extra['window'] + config.extra['static_window'] + config.epoch_end_at, config)
+        self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
+        self.run_loop(config.extra['window'] + 40, config.extra['window'] + 40 + config.epoch_end_at, config)
 
         self.logger.close()
         save_model(self.model, self.save_path(self.global_step))
@@ -97,7 +98,7 @@ class TrainerClassification:
             self.model.eval()
             # with torch.no_grad():
             self.run_epoch(phase='test', config=config)
-            
+
     def at_exp_start(self, config):
         """
         Initialization of experiment.
@@ -146,13 +147,6 @@ class TrainerClassification:
                     if config.clip_value > 0:
                         clip_grad_norm(torch.nn.utils.clip_grad_norm, self.model, config.clip_value)
                     self.optim.step()
-                    # norm_squared = model_gradient_norm(self.model)
-                    # step_assets['evaluators']['grad_norm_squared'] = norm_squared
-                    # self.trajectory_length_squared += self.lr * norm_squared
-                    # step_assets['evaluators']['trajectory_length_squared'] = self.trajectory_length_squared
-                    # step_assets['evaluators']['distance_from_initialization_l2_squared'] = distance_between_models(self.model_zero, self.model, 'l2')
-                    # # step_assets['evaluators']['distance_from_initialization_cosine'] = distance_between_models(self.model_zero, self.model, 'cosine')
-                    # step_assets['evaluators']['trajectory_length_minus_distance_from_initialization_squared'] = step_assets['evaluators']['trajectory_length_squared'] - step_assets['evaluators']['distance_from_initialization_l2_squared']
                     step_assets['evaluators'] = self.batch_variance(step_assets['evaluators'], 'l2')
                     if self.lr_scheduler is not None:
                         self.lr_scheduler.step()

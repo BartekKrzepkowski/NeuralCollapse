@@ -37,7 +37,7 @@ def get_cifar10(dataset_path, whether_aug=True, proper_normalization=True):
     transform_train_2 = transforms.Compose([
         transforms.ToTensor(),
         transforms.RandomAffine(degrees=0, translate=(1/8, 1/8)),
-        # transforms.RandomHorizontalFlip(),
+        transforms.RandomHorizontalFlip(),
         transforms.Normalize(mean, std),
     ])
     transform_train = transform_train_2 if whether_aug else transform_eval
@@ -154,7 +154,7 @@ def get_cubbirds(proper_normalization=False):
 
 
 def get_food101(dataset_path, whether_aug=True, proper_normalization=True):
-    dataset_path = dataset_path if dataset_path is not None else os.environ['CIFAR100_PATH']
+    dataset_path = dataset_path if dataset_path is not None else os.environ['FOOD101_PATH']
     if proper_normalization:
         mean, std = (0.485,0.456,0.406), (0.229,0.224,0.225)
     else:

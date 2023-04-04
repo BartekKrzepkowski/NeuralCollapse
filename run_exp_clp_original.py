@@ -8,11 +8,11 @@ import torch
 from src.utils.prepare import prepare_model, prepare_loaders, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
 from src.utils.utils_visualisation import ee_tensorboard_layout
-from src.trainer.trainer_classification import TrainerClassification
+from src.trainer.trainer_classification_original_clp import TrainerClassification
 from src.trainer.trainer_context import TrainerContext
 
 
-def objective(exp, lr_former, lr_latter, window, epochs):
+def objective(exp, window, epochs):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
@@ -27,7 +27,7 @@ def objective(exp, lr_former, lr_latter, window, epochs):
     EPOCHS = epochs
     GRAD_ACCUM_STEPS = 1
     CLIP_VALUE = 0.0
-    FP = 0.0
+    FP = 1e-2
     WD = 0.0
 
     # prepare params
@@ -39,18 +39,18 @@ def objective(exp, lr_former, lr_latter, window, epochs):
         'scheduler': None
     }
     # wandb params
-    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]} {lr_former} -> {lr_latter}, without warmup, learning rate'
+    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_fp_{FP}, original_clp'
     EXP_NAME = f'{GROUP_NAME}_window_{window}'
-    PROJECT_NAME = 'Critical_Periods_lr' 
+    PROJECT_NAME = 'Critical_Periods_lr'
     ENTITY_NAME = 'ideas_cv'
 
     h_params_overall = {
         'model': {'layers_dim': DIMS, 'activation_name': 'relu', 'conv_params': CONV_PARAMS},
         'criterion': {'model': None, 'general_criterion_name': 'ce', 'num_classes': NUM_CLASSES,
                       'whether_record_trace': True, 'fpw': FP},
-        'dataset': {'dataset_path': None, 'whether_aug': True},
+        'dataset': {'dataset_path': None, 'whether_aug': True, 'proper_normalization': False},
         'loaders': {'batch_size': 200, 'pin_memory': True, 'num_workers': 8},
-        'optim': {'lr': lr_latter, 'momentum': 0.0, 'weight_decay': WD},
+        'optim': {'lr': 1e-1, 'momentum': 0.0, 'weight_decay': WD},
         'scheduler': {'eta_min': 1e-6, 'T_max': None},
         'type_names': type_names
     }
@@ -96,7 +96,7 @@ def objective(exp, lr_former, lr_latter, window, epochs):
                        },
         whether_disable_tqdm=True,
         random_seed=RANDOM_SEED,
-        extra={'lr_former': lr_former, 'lr_latter': lr_latter, 'window': window, 'static_window': 40, 'scheduler_climbing_steps': 5},
+        extra={'window': window},
         device=device
     )
     if exp == 'deficit':
@@ -110,4 +110,4 @@ def objective(exp, lr_former, lr_latter, window, epochs):
 if __name__ == "__main__":
     EPOCHS = 160
     for window in np.linspace(0, 120, 7):
-        objective('deficit', 5e-3, 1e-1, int(window), EPOCHS)
+        objective('deficit', int(window), EPOCHS)

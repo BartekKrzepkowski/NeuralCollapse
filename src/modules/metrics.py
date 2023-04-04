@@ -1,4 +1,5 @@
 import math
+from copy import deepcopy
 
 import torch
 
@@ -15,12 +16,60 @@ def prepare_evaluators(y_pred, y_true, loss):
     return evaluators
 
 
-def model_gradient_norm(model):
-    norm = 0.0
-    for param in model.parameters():
-        if param.requires_grad and param.grad is not None:
-            norm += (param.grad ** 2).sum().item()
-    return norm
+class BatchVariance(torch.nn.Module):
+    def __init__(self, model, optim):
+        super().__init__()
+        self.model_zero = deepcopy(model)
+        self.model = model
+        self.optim = optim
+        self.model_trajectory_length = 0.0
+
+    def forward(self, evaluators, distance_type):
+        lr = self.optim.param_groups[-1]['lr']
+        norm = self.model_gradient_norm()
+        evaluators['model_gradient_norm_squared'] = norm ** 2
+        self.model_trajectory_length += lr * norm
+        evaluators['model_trajectory_length'] = self.model_trajectory_length
+        distance_from_initialization = self.distance_between_models(distance_type)
+        evaluators[f'distance_from_initialization_{distance_type}'] = distance_from_initialization
+        evaluators['excessive_length'] = evaluators['model_trajectory_length'] - evaluators[f'distance_from_initialization_{distance_type}']
+        return evaluators
+        
+
+    def model_gradient_norm(self, norm_type=2.0):
+        parameters = [p for p in self.model.parameters() if p.requires_grad]
+        norm = torch.norm(torch.stack([torch.norm(p.grad, norm_type) for p in parameters]), norm_type)
+        return norm.item()
+    
+    def distance_between_models(self, distance_type):
+        def distance_between_models_l2(parameters1, parameters2, norm_type=2.0):
+            """
+            Returns the l2 distance between two models.
+            """
+            distance = torch.norm(torch.stack([torch.norm(p1-p2, norm_type) for p1, p2 in zip(parameters1, parameters2)]), norm_type)
+            return distance.item()
+        
+        def distance_between_models_cosine(parameters1, parameters2):
+            """
+            Returns the cosine distance between two models.
+            """
+            distance = 0
+            for p1, p2 in zip(parameters1, parameters2):
+                distance += 1 - torch.cosine_similarity(p1.flatten(), p2.flatten())
+            return distance.item()
+
+        """
+        Returns the distance between two models.
+        """
+        parameters1 = [p for p in self.model_zero.parameters() if p.requires_grad]
+        parameters2 = [p for p in self.model.parameters() if p.requires_grad]
+        if distance_type == 'l2':
+            distance = distance_between_models_l2(parameters1, parameters2)
+        elif distance_type == 'cosine':
+            distance = distance_between_models_cosine(parameters1, parameters2)
+        else:
+            raise ValueError(f'Distance type {distance_type} not supported.')
+        return distance
 
 
 class CosineAlignments:
@@ -51,5 +100,34 @@ class CosineAlignments:
             gs.append(g)
             self.model.zero_grad()
         return gs
+    
+def max_eigenvalue(model, loss_fn, data, target):
+    # Set model to evaluation mode
+    model.eval()
+    # Create a variable from the data
+    data = torch.autograd.Variable(data, requires_grad=True)
+    # Compute the loss
+    loss = loss_fn(model(data), target)
+    # Compute the gradients
+    grads = torch.autograd.grad(
+            loss,
+            [p for p in model.parameters() if p.requires_grad],
+            retain_graph=True,
+            create_graph=True)
+    # Get the gradients of the weights
+    grads = torch.cat([g.reshape(-1) for g in grads])
+    # Create a vector of ones with the same size as the gradients
+    v = torch.ones(grads.size()).to(grads.device)
+    # Compute the Hessian-vector product
+    Hv = torch.autograd.grad(grads, model.parameters(), grad_outputs=v, retain_graph=True)
+    # Concatenate the Hessian-vector product into a single vector
+    Hv = torch.cat([h.reshape(-1) for h in Hv])
+    # Compute the maximum eigenvalue using the power iteration method
+    for _ in range(100):
+        v = Hv / torch.norm(Hv)
+        Hv = torch.autograd.grad(grads, model.parameters(), grad_outputs=v, retain_graph=True)
+        Hv = torch.cat([h.reshape(-1) for h in Hv])
+
+    return (v * Hv).sum()
         
 
