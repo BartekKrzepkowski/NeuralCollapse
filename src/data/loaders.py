@@ -5,6 +5,8 @@ import torch
 from torchvision import datasets, transforms
 from torchvision.transforms import InterpolationMode
 
+mean, std = (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.262)
+
 from torchvision.transforms import Compose, ToTensor, Normalize, Resize,\
     RandomVerticalFlip, RandomAffine, RandomHorizontalFlip, Pad
 from torch.utils.data import DataLoader, TensorDataset
@@ -15,7 +17,7 @@ class Loaders(object):
     def get_vertical_flipped_loader(self, batch_size=128, num_workers=6, is_train=True):
         if self.dataset_name == 'cifar10':
             transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
-                                 RandomVerticalFlip(p=1), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                 RandomVerticalFlip(p=1), Normalize(mean, std)])
             train_dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=True, transform=transform, download=True)
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Normalize((0.5,), (0.5,))])
@@ -27,7 +29,7 @@ class Loaders(object):
     def get_random_classes_loader(self, batch_size=128, num_workers=6, is_train=True):
         if self.dataset_name == 'cifar10':
             transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
-                                 Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                 Normalize(mean, std)])
             train_dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=True, transform=transform, download=True)
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Normalize((0.5,), (0.5,))])
@@ -51,8 +53,8 @@ class Loaders(object):
 
     def get_blurred_loader(self, batch_size=128, num_workers=4, is_train=True):
         if self.dataset_name == 'cifar10':
-            transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
-                                 Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            transform = Compose([ToTensor(), Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None),
+                                RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(), Normalize(mean, std)])
             train_dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=True, transform=transform, download=True)
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Resize(8, interpolation=InterpolationMode.BILINEAR), Resize(32, interpolation=InterpolationMode.BILINEAR), Normalize((0.5,), (0.5,))])
@@ -65,7 +67,7 @@ class Loaders(object):
     def get_proper_loader(self, batch_size=128, num_workers=4, is_train=True):
         if self.dataset_name == 'cifar10':
             transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
-                                 Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                 Normalize(mean, std)])
             train_dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=is_train, transform=transform, download=True)
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Normalize((0.5,), (0.5,))])
@@ -77,7 +79,7 @@ class Loaders(object):
     def get_proper_transform(self):
         if self.dataset_name == 'cifar10':
             transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
-                                 Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                 Normalize(mean, std)])
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Normalize((0.5,), (0.5,))])
         return transform
