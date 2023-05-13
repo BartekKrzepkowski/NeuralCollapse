@@ -22,6 +22,20 @@ def prepare_loaders(dataset_name, dataset_params, loader_params):
     return loaders
 
 
+
+def prepare_loaders_clp(dataset_name, dataset_params, loader_params):
+    train_dataset, test_proper_dataset, test_blurred_dataset = DATASET_NAME_MAP[dataset_name](**dataset_params)
+    train_loader = DataLoader(train_dataset, shuffle=True, **loader_params)
+    test_proper_loader = DataLoader(test_proper_dataset, shuffle=False, **loader_params)
+    test_blurred_loader = DataLoader(test_blurred_dataset, shuffle=False, **loader_params)
+    loaders = {
+        'train': train_loader,
+        'test_proper': test_proper_loader,
+        'test_blurred': test_blurred_loader
+    }
+    return loaders
+
+
 def prepare_criterion(loss_name, criterion_params={}):
     criterion = LOSS_NAME_MAP[loss_name](**criterion_params)
     return criterion

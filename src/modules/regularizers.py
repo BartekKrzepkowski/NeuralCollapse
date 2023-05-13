@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import torch
+from torch.distributions import Categorical
 
 from src.utils.utils_optim import get_every_but_forbidden_parameter_names, FORBIDDEN_LAYER_TYPES
 from src.utils.utils_regularizers import get_desired_parameter_names
@@ -15,9 +16,7 @@ class FisherPenaly(torch.nn.Module):
         self.penalized_parameter_names = get_every_but_forbidden_parameter_names(self.model, FORBIDDEN_LAYER_TYPES)
 
     def forward(self, y_pred):
-        prob = torch.nn.functional.softmax(y_pred, dim=1)
-        idx_sampled = prob.multinomial(1)
-        y_sampled = self.labels[idx_sampled].long().squeeze()
+        y_sampled = Categorical(logits=y_pred).sample()
         loss = self.criterion(y_pred, y_sampled)
         params_names, params = zip(*[(n, p) for n, p in self.model.named_parameters() if p.requires_grad])
         grads = torch.autograd.grad(

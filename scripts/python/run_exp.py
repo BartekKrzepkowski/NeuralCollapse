@@ -39,7 +39,7 @@ def objective(exp, lr_former, lr_latter, window, epochs):
         'scheduler': None
     }
     # wandb params
-    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]} {lr_former} -> {lr_latter}, without warmup, learning rate'
+    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]} {lr_former} -> {lr_latter}, with warmup, learning rate, worse to the best'
     EXP_NAME = f'{GROUP_NAME}_window_{window}'
     PROJECT_NAME = 'Critical_Periods_lr' 
     ENTITY_NAME = 'ideas_cv'
@@ -96,7 +96,7 @@ def objective(exp, lr_former, lr_latter, window, epochs):
                        },
         whether_disable_tqdm=True,
         random_seed=RANDOM_SEED,
-        extra={'lr_former': lr_former, 'lr_latter': lr_latter, 'window': window, 'static_window': 40, 'scheduler_climbing_steps': 5},
+        extra={'lr_former': lr_former, 'lr_latter': lr_latter, 'window': window, 'static_window': 40, 'scheduler_climbing_steps': T_max//EPOCHS}, #wspina się jedną epokę
         device=device
     )
     if exp == 'deficit':
@@ -109,5 +109,5 @@ def objective(exp, lr_former, lr_latter, window, epochs):
 
 if __name__ == "__main__":
     EPOCHS = 160
-    for window in np.linspace(0, 120, 7):
-        objective('deficit', 5e-3, 1e-1, int(window), EPOCHS)
+    for window in np.linspace(20, 140, 7):
+        objective('deficit', 3.5e-1, 2e-1, int(window), EPOCHS)

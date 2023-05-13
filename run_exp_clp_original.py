@@ -5,7 +5,7 @@ import torch
 # from rich.traceback import install
 # install(show_locals=True)
 
-from src.utils.prepare import prepare_model, prepare_loaders, prepare_criterion, prepare_optim_and_scheduler
+from src.utils.prepare import prepare_model, prepare_loaders_clp, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
 from src.utils.utils_visualisation import ee_tensorboard_layout
 from src.trainer.trainer_classification_original_clp import TrainerClassification
@@ -26,9 +26,10 @@ def objective(exp, window, epochs):
     RANDOM_SEED = 83
     EPOCHS = epochs
     GRAD_ACCUM_STEPS = 1
-    CLIP_VALUE = 0.0
-    FP = 1e-2
+    CLIP_VALUE = 100.0
+    FP = 0.0#1e-2
     WD = 0.0
+    LR = 2e-1
 
     # prepare params
     type_names = {
@@ -39,19 +40,19 @@ def objective(exp, window, epochs):
         'scheduler': None
     }
     # wandb params
-    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_fp_{FP}, original_clp'
-    EXP_NAME = f'{GROUP_NAME}_window_{window}'
+    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_fp_{FP}_lr_{LR}, original_clp'
+    EXP_NAME = f'{GROUP_NAME}_window_{window}_adjusted, stiffness'
     PROJECT_NAME = 'Critical_Periods_lr'
     ENTITY_NAME = 'ideas_cv'
 
     h_params_overall = {
         'model': {'layers_dim': DIMS, 'activation_name': 'relu', 'conv_params': CONV_PARAMS},
         'criterion': {'model': None, 'general_criterion_name': 'ce', 'num_classes': NUM_CLASSES,
-                      'whether_record_trace': True, 'fpw': FP},
-        'dataset': {'dataset_path': None, 'whether_aug': True, 'proper_normalization': False},
+                      'whether_record_trace': False, 'fpw': FP},
+        'dataset': {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True},
         'loaders': {'batch_size': 200, 'pin_memory': True, 'num_workers': 8},
-        'optim': {'lr': 1e-1, 'momentum': 0.0, 'weight_decay': WD},
-        'scheduler': {'eta_min': 1e-6, 'T_max': None},
+        'optim': {'lr': LR, 'momentum': 0.0, 'weight_decay': WD},
+        'scheduler': None,
         'type_names': type_names
     }
     # set seed to reproduce the results in the future
@@ -62,13 +63,22 @@ def objective(exp, window, epochs):
     h_params_overall['criterion']['model'] = model
     criterion = prepare_criterion(type_names['criterion'], h_params_overall['criterion'])
     # prepare loaders
-    loaders = prepare_loaders(type_names['dataset'], h_params_overall['dataset'], h_params_overall['loaders'])
+    loaders = prepare_loaders_clp(type_names['dataset'], h_params_overall['dataset'], h_params_overall['loaders'])
     # prepare optimizer & scheduler
-    T_max = (len(loaders['train']) // GRAD_ACCUM_STEPS) * EPOCHS
-    h_params_overall['scheduler']['T_max'] = T_max
+    T_max = (len(loaders['train']) // GRAD_ACCUM_STEPS) * (window + epochs)
+    print(T_max)
+    # print(T_max//window, T_max-3*T_max//window, 3*T_max//window)
+    # h_params_overall['scheduler'] = {'eta_max':LR, 'eta_medium':1e-2, 'eta_min':1e-6, 'warmup_iters2': 3*T_max//window, 'inter_warmups_iters': T_max-3*T_max//window, 'warmup_iters1': 3*T_max//window, 'milestones':[], 'gamma':1e-1}
     optim, lr_scheduler = prepare_optim_and_scheduler(model, type_names['optim'], h_params_overall['optim'],
                                                       type_names['scheduler'], h_params_overall['scheduler'])
-
+    # DODAJ - POPRAWNE DANE
+    print(sum(dict((p.data_ptr(), p.numel()) for p in model.parameters() if p.requires_grad).values()))
+    x_data_proper = torch.load(f'data/{type_names["dataset"]}_held_out_proper_x.pt').to(device)
+    y_data_proper = torch.load(f'data/{type_names["dataset"]}_held_out_proper_y.pt').to(device)
+    
+    x_data_blurred = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_x.pt').to(device)
+    y_data_blurred = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_y.pt').to(device) 
+    
     # prepare trainer
     params_trainer = {
         'model': model,
@@ -76,6 +86,7 @@ def objective(exp, window, epochs):
         'loaders': loaders,
         'optim': optim,
         'lr_scheduler': lr_scheduler,
+        'extra': {'x_true1': x_data_proper, 'y_true1': y_data_proper, 'x_true2': x_data_blurred, 'y_true2': y_data_blurred, 'num_classes': NUM_CLASSES},
     }
     trainer = TrainerClassification(**params_trainer)
 
@@ -85,12 +96,13 @@ def objective(exp, window, epochs):
         epoch_start_at=0,
         epoch_end_at=EPOCHS,
         grad_accum_steps=GRAD_ACCUM_STEPS,
-        save_multi=T_max // 10,
+        save_multi=0,#T_max // 10,
         log_multi=1,#(T_max // EPOCHS) // 10,
+        stiff_multi=(T_max // (window + epochs)) // 2,
         clip_value=CLIP_VALUE,
         base_path='reports',
         exp_name=EXP_NAME,
-        logger_config={'logger_name': 'tensorboard', 'project_name': PROJECT_NAME, 'entity': ENTITY_NAME, 'group': GROUP_NAME,
+        logger_config={'logger_name': 'tensorboard', 'project_name': PROJECT_NAME, 'entity': ENTITY_NAME,
                        'hyperparameters': h_params_overall, 'whether_use_wandb': True,
                        'layout': ee_tensorboard_layout(params_names), 'mode': 'online'
                        },
@@ -109,5 +121,5 @@ def objective(exp, window, epochs):
 
 if __name__ == "__main__":
     EPOCHS = 160
-    for window in np.linspace(0, 120, 7):
+    for window in np.linspace(25, 200, 8):
         objective('deficit', int(window), EPOCHS)

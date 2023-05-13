@@ -36,9 +36,12 @@ class TrainerClassification:
                 g['lr'] = config.extra['lr_former']
             self.run_loop(0, config.extra['window'], config)
 
-            for g in self.optim.param_groups:
-                g['lr'] = config.extra['lr_latter']
+            # UP
+            # for g in self.optim.param_groups:
+            #     g['lr'] = config.extra['lr_latter']
             # self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=config.extra['lr_former']/config.extra['lr_latter'], total_iters=config.extra['scheduler_climbing_steps'])
+            # DOWN
+            self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=1.0, end_factor=config.extra['lr_latter']/config.extra['lr_former'] , total_iters=config.extra['scheduler_climbing_steps'])
             print('Leaving deficit phase!!!')
 
         self.criterion.fpw = 0.0
@@ -57,6 +60,7 @@ class TrainerClassification:
             self.criterion.fpw = 0.0
             self.run_loop(0, config.extra['window'], config)
             self.criterion.fpw = fpw
+            # self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=config.extra['lr_latter']/config.extra['lr_former'] , total_iters=config.extra['scheduler_climbing_steps'])
             self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(self.optim, start_factor=1.0, end_factor=config.extra['lr_former']/config.extra['lr_latter'], total_iters=config.extra['scheduler_climbing_steps'])
         else:
             for g in self.optim.param_groups:

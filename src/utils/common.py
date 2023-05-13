@@ -4,6 +4,7 @@ from src.data.datasets import get_mnist, get_cifar10, get_cifar100, get_tinyimag
 from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmaxLoss
 from src.modules.architectures.models import MLP, SimpleCNN, MLPwithNorm, SimpleCNNwithNorm
 from src.modules.architectures.resnets import ResNet18, ResNet34
+from src.utils.utils_optim import MultiStepwithDoubleLinearWarmup
 from src.visualization.clearml_logger import ClearMLLogger
 from src.visualization.tensorboard_pytorch import TensorboardPyTorch
 from src.visualization.wandb_logger import WandbLogger
@@ -67,4 +68,5 @@ SCHEDULER_NAME_MAP = {
     'reduce_on_plateau': torch.optim.lr_scheduler.ReduceLROnPlateau,
     'cosine': torch.optim.lr_scheduler.CosineAnnealingLR,
     'cosine_warm_restarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
+    'multistep_with_double_linear_warmup': MultiStepwithDoubleLinearWarmup,
 }

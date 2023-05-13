@@ -11,6 +11,7 @@ class TrainerContext:
     grad_accum_steps: int = None,
     save_multi: int = None,
     log_multi: int = None,
+    stiff_multi: int = None,
     clip_value: float = None,
     base_path: str = None,
     exp_name: str = None,

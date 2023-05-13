@@ -18,7 +18,7 @@ def get_mnist(dataset_path):
     return train_data, train_eval_data, test_data
 
 
-def get_cifar10(dataset_path, whether_aug=True, proper_normalization=True):
+def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True):
     dataset_path = dataset_path if dataset_path is not None else os.environ['CIFAR10_PATH']
     if proper_normalization:
         mean, std = (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.262)
@@ -27,6 +27,12 @@ def get_cifar10(dataset_path, whether_aug=True, proper_normalization=True):
     transform_eval = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
+    ])
+    transform_blurred = transforms.Compose([
+        transforms.ToTensor(), 
+        transforms.Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), 
+        transforms.Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None),
+        transforms.Normalize(mean, std)
     ])
     transform_train = transforms.Compose([
         transforms.TrivialAugmentWide(),
@@ -42,9 +48,9 @@ def get_cifar10(dataset_path, whether_aug=True, proper_normalization=True):
     ])
     transform_train = transform_train_2 if whether_aug else transform_eval
     train_data = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_train)
-    train_eval_data = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_eval)
-    test_data = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_eval)
-    return train_data, train_eval_data, test_data
+    test_proper_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_eval)
+    test_blurred_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_blurred)
+    return train_data, test_proper_dataset, test_blurred_dataset
 
 
 def get_cifar100(dataset_path, whether_aug=True, proper_normalization=True):

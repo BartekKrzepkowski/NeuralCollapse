@@ -7,12 +7,13 @@ from tqdm import tqdm, trange
 from src.data.loaders import Loaders
 from src.modules.metrics import BatchVariance
 from src.utils.common import LOGGERS_NAME_MAP
+from src.modules.metrics import Stiffness
 from src.utils.utils_trainer import adjust_evaluators, adjust_evaluators_pre_log, create_paths, save_model
 from src.utils.utils_optim import clip_grad_norm
 
 
 class TrainerClassification:
-    def __init__(self, model, criterion, loaders, optim, lr_scheduler):
+    def __init__(self, model, criterion, loaders, optim, lr_scheduler, extra):
         self.model = model
         self.criterion = criterion
         self.loaders = loaders
@@ -26,6 +27,7 @@ class TrainerClassification:
         self.global_step = None
 
         self.batch_variance = BatchVariance(model, optim)
+        self.stiffness = Stiffness(model, **extra)
 
     def run_exp1(self, config):
         batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
@@ -60,7 +62,7 @@ class TrainerClassification:
         self.at_exp_start(config)
 
         if config.extra['window'] != 0:
-            fpw = self.criterion.fpw = 0.0
+            fpw = self.criterion.fpw
             self.criterion.fpw = 0.0
             self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
             self.run_loop(0, config.extra['window'], config)
@@ -96,8 +98,9 @@ class TrainerClassification:
             self.model.train()
             self.run_epoch(phase='train', config=config)
             self.model.eval()
-            # with torch.no_grad():
-            self.run_epoch(phase='test', config=config)
+            with torch.no_grad():
+                self.run_epoch(phase='test_proper', config=config)
+                self.run_epoch(phase='test_blurred', config=config)
 
     def at_exp_start(self, config):
         """
@@ -107,6 +110,7 @@ class TrainerClassification:
         self.base_path, self.save_path = create_paths(config.base_path, config.exp_name)
         config.logger_config['log_dir'] = f'{self.base_path}/{config.logger_config["logger_name"]}'
         self.logger = LOGGERS_NAME_MAP[config.logger_config['logger_name']](config)
+        self.stiffness.logger = self.logger
 
     def run_epoch(self, phase, config):
         """
@@ -145,17 +149,21 @@ class TrainerClassification:
                 loss.backward()
                 if (i + 1) % config.grad_accum_steps == 0 or (i + 1) == loader_size:
                     if config.clip_value > 0:
-                        clip_grad_norm(torch.nn.utils.clip_grad_norm, self.model, config.clip_value)
+                        clip_grad_norm(torch.nn.utils.clip_grad_norm_, self.model, config.clip_value)
                     self.optim.step()
-                    step_assets['evaluators'] = self.batch_variance(step_assets['evaluators'], 'l2')
+                    if self.batch_variance is not None:
+                        step_assets['evaluators'] = self.batch_variance(step_assets['evaluators'], 'l2')
                     if self.lr_scheduler is not None:
                         self.lr_scheduler.step()
                     self.optim.zero_grad()
                 else:
-                    norm = self.batch_variance.model_gradient_norm()
-                    step_assets['evaluators']['grad_norm_squared'] = norm ** 2
+                    if self.batch_variance is not None:
+                        norm = self.batch_variance.model_gradient_norm()
+                        step_assets['evaluators']['grad_norm_squared'] = norm ** 2
                 loss *= config.grad_accum_steps
-
+                if self.global_step % (config.grad_accum_steps * config.stiff_multi) == 0:
+                    self.stiffness.log_stiffness(self.global_step)
+            
             ### LOGGING ###
             running_assets = self.update_assets(running_assets, step_assets, step_assets['denom'], 'running', phase)
 

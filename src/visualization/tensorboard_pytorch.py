@@ -16,7 +16,7 @@ class TensorboardPyTorch:
                 config=config.logger_config['hyperparameters'],
                 dir=config.logger_config['log_dir'],
                 mode=config.logger_config['mode'],
-                group=config.logger_config['group'],
+                # group=config.logger_config['group'],
             )
             if len(wandb.patched["tensorboard"]) > 0:
                 wandb.tensorboard.unpatch()
@@ -41,9 +41,15 @@ class TensorboardPyTorch:
             wandb.watch(model, log_freq=1000, idx=0, log_graph=True, log='all', criterion=criterion)
         self.writer.add_graph(model, inp)
         self.flush()
+        
+    def log_figures(self, images, global_step):
+        for tag in images:
+            self.writer.add_figure(tag, images[tag], global_step=global_step)
+        self.flush()
 
-    def log_histogram(self, tag, tensor, global_step): # problem with numpy=1.24.0
-        self.writer.add_histogram(tag, tensor, global_step=global_step)
+    def log_histogram(self, values, global_step): # problem with numpy=1.24.0
+        for tag in values:
+            self.writer.add_histogram(tag, values[tag], global_step=global_step)
         self.flush()
 
     def log_scalars(self, scalar_dict, global_step):
