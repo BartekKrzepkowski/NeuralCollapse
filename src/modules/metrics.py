@@ -163,6 +163,7 @@ class PerSampleGrad(torch.nn.Module):
             'rank_of_similarity_11': {},
             # 'rank_of_weights': {},
             'cumm_gradients_rank_11': {},
+            'gradients_subspace_dim_11': {},
         }
         params = {k: v.detach() for k, v in self.model.named_parameters()}
         buffers = {k: v.detach() for k, v in self.model.named_buffers()}
@@ -190,6 +191,7 @@ class PerSampleGrad(torch.nn.Module):
                     'rank_of_similarity_22': {},
                     'rank_of_similarity_12': {},
                     'cumm_gradients_rank_22': {},
+                    'gradients_subspace_dim_22': {},
                 })
             ft_per_sample_grads2 = self.ft_criterion(params, buffers, x_true2, y_true2)
             ft_per_sample_grads2 = {k2: v.detach().data for k2, v in ft_per_sample_grads2.items()}
@@ -242,6 +244,7 @@ class PerSampleGrad(torch.nn.Module):
         ft_per_sample_grads['concatenated_weights'] = concatenated_weights
         normed_concatenated_weights = ft_per_sample_grads['concatenated_weights'] / (1e-9 + torch.norm(ft_per_sample_grads['concatenated_weights'], dim=1, keepdim=True))
         scalars[f'trace_of_cov_{ind}']['concatenated_weights'] = self.trace_of_cov(ft_per_sample_grads['concatenated_weights'])
+        scalars[f'gradients_subspace_dim_{ind}']['concatenated_weights'] = self.matrix_rank(normed_concatenated_weights)
         return normed_concatenated_weights
     
     def gather_metrics(self, ft_per_sample_grads1, ft_per_sample_grads2, normed_ft_per_sample_grad1, normed_ft_per_sample_grad2, matrices, scalars, tag, hermitian=False, ind: str = None):
@@ -290,8 +293,7 @@ class Stiffness(torch.nn.Module):
                 acc = (labels_pred == labels_true).sum() / labels_true.shape[0]
                 stiffness_logs[f'clustering/accuracy_{tag}'] = acc
                 stiffness_logs[f'clustering/unsolicited_ratio_{tag}'] = unsolicited_ratio
-                stiffness_hists[f'clustering/histogram_{tag}'] = labels_pred
-                
+                stiffness_hists[f'clustering/histogram_{tag}'] = labels_pred  
         
         for tag in matrices[1]:
             _, ax  = plt.subplots(1, 1, figsize=(10, 10))
@@ -369,8 +371,8 @@ class Stiffness(torch.nn.Module):
     def clustering(self, similarity_matrix, labels_true):
         similarity_matrix_ = similarity_matrix.cpu().numpy()
         labels_pred = SpectralClustering(n_clusters=self.num_classes, affinity='precomputed', n_init=100, assign_labels='discretize').fit_predict((1+similarity_matrix_)/2)
-        labels_pred = self.retrieve_info(labels_pred, labels_true)
-        return labels_pred
+        labels_pred, unsolicited_ratio = self.retrieve_info(labels_pred, labels_true)
+        return labels_pred, unsolicited_ratio
     
     
     def retrieve_info(self, cluster_labels, y_train):
