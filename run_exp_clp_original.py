@@ -29,7 +29,7 @@ def objective(exp, window, epochs):
     CLIP_VALUE = 100.0
     FP = 0.0#1e-2
     WD = 0.0
-    LR = 2e-1
+    LR = 2e-2
 
     # prepare params
     type_names = {
@@ -120,6 +120,6 @@ def objective(exp, window, epochs):
 
 
 if __name__ == "__main__":
-    EPOCHS = 160
-    for window in np.linspace(25, 200, 8):
+    EPOCHS = 140
+    for window in np.linspace(0, 200, 9):
         objective('deficit', int(window), EPOCHS)

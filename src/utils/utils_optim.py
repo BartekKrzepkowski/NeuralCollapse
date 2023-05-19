@@ -42,7 +42,8 @@ def configure_optimizer(optim_wrapper, model, optim_kwargs):
 
 
 def clip_grad_norm(clip_grad_wrapper, model, clip_value):
-    clip_grad_wrapper(filter(lambda p: p.requires_grad, model.parameters()), clip_value)
+    norm = clip_grad_wrapper(filter(lambda p: p.requires_grad, model.parameters()), clip_value)
+    return norm
 
 
 FORBIDDEN_LAYER_TYPES = [torch.nn.Embedding, torch.nn.LayerNorm, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d]

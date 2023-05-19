@@ -41,12 +41,12 @@ class TrainerClassification:
         if config.extra['window'] != 0:
             print('Entering deficit phase!!!')
             self.loaders['train'] = self.train_loader.get_blurred_loader(batch_size, is_train=True, num_workers=num_workers)
-            self.run_loop(0, config.extra['window'], config)
+            self.run_loop(-config.extra['window'], 0, config)
             print('Leaving deficit phase!!!')
 
         self.criterion.fpw = 0.0
         self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
-        self.run_loop(config.extra['window'], config.extra['window'] + config.epoch_end_at, config)
+        self.run_loop(0, config.epoch_end_at, config)
 
         self.logger.close()
         save_model(self.model, self.save_path(self.global_step))
@@ -149,7 +149,8 @@ class TrainerClassification:
                 loss.backward()
                 if (i + 1) % config.grad_accum_steps == 0 or (i + 1) == loader_size:
                     if config.clip_value > 0:
-                        clip_grad_norm(torch.nn.utils.clip_grad_norm_, self.model, config.clip_value)
+                        norm = clip_grad_norm(torch.nn.utils.clip_grad_norm_, self.model, config.clip_value)
+                        step_assets['evaluators']['batch_variance/model_gradient_norm_squared_from_pytorch'] = norm.item() ** 2
                     self.optim.step()
                     if self.batch_variance is not None:
                         step_assets['evaluators'] = self.batch_variance(step_assets['evaluators'], 'l2')

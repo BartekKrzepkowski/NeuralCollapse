@@ -23,54 +23,66 @@ class BatchVariance(torch.nn.Module):
         self.model_zero = deepcopy(model)
         self.model = model
         self.optim = optim
-        self.model_trajectory_length = 0.0
-
+        self.model_trajectory_length_group = {k: 0.0 for k, _ in self.model.named_parameters() if _.requires_grad}
+        self.model_trajectory_length_overall = 0.0
+        
     def forward(self, evaluators, distance_type):
         lr = self.optim.param_groups[-1]['lr']
-        norm = self.model_gradient_norm()
-        evaluators['model_gradient_norm_squared'] = norm ** 2
-        self.model_trajectory_length += lr * norm
-        evaluators['model_trajectory_length'] = self.model_trajectory_length
-        distance_from_initialization = self.distance_between_models(distance_type)
-        evaluators[f'distance_from_initialization_{distance_type}'] = distance_from_initialization
-        evaluators['excessive_length'] = evaluators['model_trajectory_length'] - evaluators[f'distance_from_initialization_{distance_type}']
+        self.model_trajectory_length(evaluators, lr)
+        self.distance_between_models(evaluators, distance_type)
+        evaluators['batch_variance/excessive_length_overall'] = evaluators['batch_variance/model_trajectory_length_overall'] - evaluators[f'batch_variance/distance_from initialization_{distance_type}']
         return evaluators
         
 
-    def model_gradient_norm(self, norm_type=2.0):
-        parameters = [p for p in self.model.parameters() if p.requires_grad]
-        norm = torch.norm(torch.stack([torch.norm(p.grad, norm_type) for p in parameters]), norm_type)
-        return norm.item()
+    def model_trajectory_length(self, evaluators, lr, norm_type=2.0):
+        named_parameters = [(n, p) for n, p in self.model.named_parameters() if p.requires_grad]
+        norm_per_layer = []
+        for n, p in named_parameters:
+            norm_per = torch.norm(p.grad, norm_type)
+            norm_per_layer.append(norm_per)
+            evaluators[f'batch_variance_model_gradient_norm_squared/{n}'] = norm_per.item() ** 2
+            self.model_trajectory_length_group[n] += lr * norm_per.item()
+            evaluators[f'batch_variance_model_trajectory_length_group/{n}'] = self.model_trajectory_length_group[n]
+            
+        norm = torch.norm(torch.stack(norm_per_layer), norm_type).item()
+        evaluators[f'batch_variance/model_gradient_norm_squared_overall'] = norm ** 2
+        self.model_trajectory_length_overall += lr * norm
+        evaluators['batch_variance/model_trajectory_length_overall'] = self.model_trajectory_length_overall
     
-    def distance_between_models(self, distance_type):
-        def distance_between_models_l2(parameters1, parameters2, norm_type=2.0):
+    def distance_between_models(self, evaluators, distance_type):
+        def distance_between_models_l2(named_parameters1, named_parameters2, norm_type=2.0):
             """
             Returns the l2 distance between two models.
             """
-            distance = torch.norm(torch.stack([torch.norm(p1-p2, norm_type) for p1, p2 in zip(parameters1, parameters2)]), norm_type)
-            return distance.item()
+            distances = []
+            for (n1, p1), (_, p2) in zip(named_parameters1, named_parameters2):
+                dist = torch.norm(p1-p2, norm_type)
+                distances.append(dist)
+                evaluators[f'batch_variance_distance_from initialization_l2/{n1}'] = dist.item()
+            distance = torch.norm(torch.stack(distances), norm_type)
+            evaluators['batch_variance/distance_from initialization_l2'] = distance.item()
         
-        def distance_between_models_cosine(parameters1, parameters2):
+        def distance_between_models_cosine(named_parameters1, named_parameters2):
             """
             Returns the cosine distance between two models.
             """
-            distance = 0
-            for p1, p2 in zip(parameters1, parameters2):
+            distances = []
+            for (n1, p1), (_, p2) in zip(named_parameters1, named_parameters2):
+                1 / 0
                 distance += 1 - torch.cosine_similarity(p1.flatten(), p2.flatten())
             return distance.item()
 
         """
         Returns the distance between two models.
         """
-        parameters1 = [p for p in self.model_zero.parameters() if p.requires_grad]
-        parameters2 = [p for p in self.model.parameters() if p.requires_grad]
+        named_parameters1 = [(n, p) for n, p in self.model_zero.named_parameters() if p.requires_grad]
+        named_parameters2 = [(n, p) for n, p in self.model.named_parameters() if p.requires_grad]
         if distance_type == 'l2':
-            distance = distance_between_models_l2(parameters1, parameters2)
+            distance_between_models_l2(named_parameters1, named_parameters2)
         elif distance_type == 'cosine':
-            distance = distance_between_models_cosine(parameters1, parameters2)
+            distance_between_models_cosine(named_parameters1, named_parameters2)
         else:
             raise ValueError(f'Distance type {distance_type} not supported.')
-        return distance
 
 
 class CosineAlignments:
@@ -159,11 +171,11 @@ class PerSampleGrad(torch.nn.Module):
         }
         scalars = {
             'trace_of_cov_11': {},
-            'rank_of_gradients_11': {},
-            'rank_of_similarity_11': {},
-            # 'rank_of_weights': {},
-            'cumm_gradients_rank_11': {},
-            'gradients_subspace_dim_11': {},
+            # 'rank_of_gradients_11': {},
+            # 'rank_of_similarity_11': {},
+            # # 'rank_of_weights': {},
+            # 'cumm_gradients_rank_11': {},
+            # 'gradients_subspace_dim_11': {},
         }
         params = {k: v.detach() for k, v in self.model.named_parameters()}
         buffers = {k: v.detach() for k, v in self.model.named_buffers()}
@@ -187,11 +199,11 @@ class PerSampleGrad(torch.nn.Module):
                 })
             scalars.update({
                     'trace_of_cov_22': {},
-                    'rank_of_gradients_22': {},
-                    'rank_of_similarity_22': {},
-                    'rank_of_similarity_12': {},
-                    'cumm_gradients_rank_22': {},
-                    'gradients_subspace_dim_22': {},
+                    # 'rank_of_gradients_22': {},
+                    # 'rank_of_similarity_22': {},
+                    # 'rank_of_similarity_12': {},
+                    # 'cumm_gradients_rank_22': {},
+                    # 'gradients_subspace_dim_22': {},
                 })
             ft_per_sample_grads2 = self.ft_criterion(params, buffers, x_true2, y_true2)
             ft_per_sample_grads2 = {k2: v.detach().data for k2, v in ft_per_sample_grads2.items()}
@@ -213,9 +225,9 @@ class PerSampleGrad(torch.nn.Module):
             self.gather_metrics(ft_per_sample_grads1, ft_per_sample_grads2, normed_concatenated_weights1, normed_concatenated_weights2, matrices, scalars, tag='concatenated_weights', hermitian=False, ind='12')
         
         self.gather_metrics(ft_per_sample_grads1, ft_per_sample_grads1, normed_concatenated_weights1, normed_concatenated_weights1, matrices, scalars, tag='concatenated_weights', hermitian=True, ind='11')
-        del scalars['cumm_gradients_rank_11']
-        if x_true2 is not None:
-            del scalars['cumm_gradients_rank_22']
+        # del scalars['cumm_gradients_rank_11']
+        # if x_true2 is not None:
+        #     del scalars['cumm_gradients_rank_22']
         return matrices, scalars
     
     def trace_of_cov(self, g):
@@ -224,34 +236,35 @@ class PerSampleGrad(torch.nn.Module):
         tr = torch.mean(g.norm(dim=1)**2)
         return tr.item()
     
-    def matrix_rank(self, g, hermitian=False):
-        rank = np.linalg.matrix_rank(g.detach().data.cpu().numpy(), hermitian=hermitian).astype(float).mean()
-        return rank
+    # def matrix_rank(self, g, hermitian=False):
+    #     pass
+        # rank = np.linalg.matrix_rank(g.detach().data.cpu().numpy(), hermitian=hermitian).astype(float).mean()
+        # return rank
         # return torch.linalg.matrix_rank(g, hermitian=hermitian).float().mean().item()
     
     def prepare_variables(self, ft_per_sample_grads, concatenated_weights, scalars, tag, ind: str = None):
-        if 'weight' in tag:
-            scalars[f'cumm_gradients_rank_{ind}'][tag] = min(ft_per_sample_grads[tag].shape[1:])
-            scalars[f'rank_of_gradients_{ind}'][tag] = self.matrix_rank(ft_per_sample_grads[tag]) / min(ft_per_sample_grads[tag].shape[1:]) # ???
+        # if 'weight' in tag:
+        #     scalars[f'cumm_gradients_rank_{ind}'][tag] = min(ft_per_sample_grads[tag].shape[1:])
+        #     scalars[f'rank_of_gradients_{ind}'][tag] = self.matrix_rank(ft_per_sample_grads[tag]) / min(ft_per_sample_grads[tag].shape[1:]) # ???
         ft_per_sample_grads[tag] = ft_per_sample_grads[tag].reshape(ft_per_sample_grads[tag].shape[0], -1)
         normed_ft_per_sample_grad = ft_per_sample_grads[tag] / (1e-9 + torch.norm(ft_per_sample_grads[tag], dim=1, keepdim=True))
         concatenated_weights = torch.cat((concatenated_weights, ft_per_sample_grads[tag]), dim=1)
-        scalars[f'trace_of_cov_{ind}'][tag] = self.trace_of_cov(ft_per_sample_grads[tag])
+        # scalars[f'trace_of_cov_{ind}'][tag] = self.trace_of_cov(ft_per_sample_grads[tag])
         return normed_ft_per_sample_grad, concatenated_weights
     
     def prepare_concatenated_weights(self, ft_per_sample_grads, concatenated_weights, scalars, ind: str = None):
-        scalars[f'rank_of_gradients_{ind}']['concatenated_weights'] = sum(scalars[f'rank_of_gradients_{ind}'][tag] * scalars[f'cumm_gradients_rank_{ind}'][tag] for tag in scalars[f'rank_of_gradients_{ind}']) / sum(scalars[f'cumm_gradients_rank_{ind}'].values())
+        # scalars[f'rank_of_gradients_{ind}']['concatenated_weights'] = sum(scalars[f'rank_of_gradients_{ind}'][tag] * scalars[f'cumm_gradients_rank_{ind}'][tag] for tag in scalars[f'rank_of_gradients_{ind}']) / sum(scalars[f'cumm_gradients_rank_{ind}'].values())
         ft_per_sample_grads['concatenated_weights'] = concatenated_weights
         normed_concatenated_weights = ft_per_sample_grads['concatenated_weights'] / (1e-9 + torch.norm(ft_per_sample_grads['concatenated_weights'], dim=1, keepdim=True))
         scalars[f'trace_of_cov_{ind}']['concatenated_weights'] = self.trace_of_cov(ft_per_sample_grads['concatenated_weights'])
-        scalars[f'gradients_subspace_dim_{ind}']['concatenated_weights'] = self.matrix_rank(normed_concatenated_weights)
+        # scalars[f'gradients_subspace_dim_{ind}']['concatenated_weights'] = self.matrix_rank(normed_concatenated_weights)
         return normed_concatenated_weights
     
     def gather_metrics(self, ft_per_sample_grads1, ft_per_sample_grads2, normed_ft_per_sample_grad1, normed_ft_per_sample_grad2, matrices, scalars, tag, hermitian=False, ind: str = None):
         matrices[f'similarity_{ind}'][tag] = normed_ft_per_sample_grad1 @ normed_ft_per_sample_grad2.T
         matrices[f'graham_{ind}'][tag] = ft_per_sample_grads1[tag] @ ft_per_sample_grads2[tag].T / matrices[f'similarity_{ind}'][tag].shape[0]
         matrices[f'cov_{ind}'][tag] = (ft_per_sample_grads1[tag] - ft_per_sample_grads1[tag].mean(dim=0, keepdim=True)) @ (ft_per_sample_grads2[tag] - ft_per_sample_grads2[tag].mean(dim=0, keepdim=True)).T / matrices[f'similarity_{ind}'][tag].shape[0]
-        scalars[f'rank_of_similarity_{ind}'][tag] = self.matrix_rank(matrices[f'similarity_{ind}'][tag], hermitian=hermitian)
+        # scalars[f'rank_of_similarity_{ind}'][tag] = self.matrix_rank(matrices[f'similarity_{ind}'][tag], hermitian=hermitian)
         if ind != '12':
             matrices[f'similarity_{ind}'][tag] = (matrices[f'similarity_{ind}'][tag] + matrices[f'similarity_{ind}'][tag].T) / 2
             matrices[f'graham_{ind}'][tag] = (matrices[f'graham_{ind}'][tag] + matrices[f'graham_{ind}'][tag].T) / 2

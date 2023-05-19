@@ -25,11 +25,16 @@ def manual_seed(random_seed, device):
 
 def adjust_evaluators(d1, dd2, denom, scope, phase):
     for evaluator_key in dd2:
-        eval_key = str(evaluator_key).split('/')
-        eval_key = eval_key[0] if len(eval_key) == 1 else '/'.join(eval_key[:-1])
-        eval_key = eval_key.split('_')
-        eval_key = '_'.join(eval_key[1:]) if eval_key[0] in {'running', 'epoch'} else '_'.join(eval_key)
-        d1[f'{scope}_{eval_key}/{phase}'] += dd2[evaluator_key] * denom
+        if 'batch_variance' not in evaluator_key:
+            eval_key = str(evaluator_key).split('/')
+            eval_key = eval_key[0] if len(eval_key) == 1 else '/'.join(eval_key[:-1])
+            eval_key = eval_key.split('_')
+            eval_key = '_'.join(eval_key[1:]) if eval_key[0] in {'running', 'epoch'} else '_'.join(eval_key)
+            d1[f'{scope}_{eval_key}/{phase}'] += dd2[evaluator_key] * denom
+        else:
+            eval_key = evaluator_key
+            d1[f'{scope}_{eval_key}'] += dd2[evaluator_key] * denom
+        
     return d1
 
 
