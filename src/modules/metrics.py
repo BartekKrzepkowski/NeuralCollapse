@@ -296,10 +296,11 @@ class Stiffness(torch.nn.Module):
         matrices, scalars = self.forward(self.x_true1, self.y_true1, self.x_true2, self.y_true2)
         
         for tag in matrices[0]:
-            stiffness_logs[f'stiffness_sharpness/{tag}'] = self.sharpness(matrices[0][tag]['concatenated_weights'])
-            _, ax  = plt.subplots(1, 1, figsize=(10, 10))
+            # stiffness_logs[f'stiffness_sharpness/{tag}'] = self.sharpness(matrices[0][tag]['concatenated_weights'])
+            # fig, ax  = plt.subplots(1, 1, figsize=(10, 10))
             # set a heatmap pallette to red-white-blue
-            stifness_heatmaps[f'stiffness/{tag}'] = sns.heatmap(matrices[0][tag]['concatenated_weights'].data.cpu().numpy(), ax=ax, center=0, cmap='PRGn').get_figure()
+            # stifness_heatmaps[f'stiffness/{tag}'] = sns.heatmap(matrices[0][tag]['concatenated_weights'].data.cpu().numpy(), ax=ax, center=0, cmap='PRGn').get_figure()
+            # plt.close(fig)
             if 'similarity' in tag and '12' not in tag:
                 labels_true = self.y_true1.cpu().numpy() if '11' in tag else self.y_true2.cpu().numpy()
                 labels_pred, unsolicited_ratio = self.clustering(matrices[0][tag]['concatenated_weights'], labels_true)
@@ -308,9 +309,10 @@ class Stiffness(torch.nn.Module):
                 stiffness_logs[f'clustering/unsolicited_ratio_{tag}'] = unsolicited_ratio
                 stiffness_hists[f'clustering/histogram_{tag}'] = labels_pred  
         
-        for tag in matrices[1]:
-            _, ax  = plt.subplots(1, 1, figsize=(10, 10))
-            stifness_heatmaps[f'class_stiffness/{tag}'] = sns.heatmap(matrices[1][tag]['concatenated_weights'].data.cpu().numpy(), ax=ax, center=0, cmap='PRGn').get_figure()
+        # for tag in matrices[1]:
+            # fig, ax  = plt.subplots(1, 1, figsize=(10, 10))
+            # stifness_heatmaps[f'class_stiffness/{tag}'] = sns.heatmap(matrices[1][tag]['concatenated_weights'].data.cpu().numpy(), ax=ax, center=0, cmap='PRGn').get_figure()
+            # plt.close(fig)
                    
         for tag in scalars[0]:
             stiffness_logs[f'traces of covs & ranks/{tag}'] = scalars[0][tag]['concatenated_weights']
@@ -320,9 +322,9 @@ class Stiffness(torch.nn.Module):
         
         stiffness_logs['steps/stiffness_train'] = step
         
-        self.logger.log_figures(stifness_heatmaps, step)
+        # self.logger.log_figures(stifness_heatmaps, step)
         self.logger.log_scalars(stiffness_logs, step)
-        self.logger.log_histogram(stiffness_hists, step)
+        # self.logger.log_histogram(stiffness_hists, step)
         
         
     def forward(self, x_true1, y_true1, x_true2=None, y_true2=None):
