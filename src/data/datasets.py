@@ -47,10 +47,10 @@ def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True):
         transforms.Normalize(mean, std),
     ])
     transform_train = transform_train_2 if whether_aug else transform_eval
-    train_data = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_train)
+    train_dataset = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_train)
     test_proper_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_eval)
     test_blurred_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_blurred)
-    return train_data, test_proper_dataset, test_blurred_dataset
+    return train_dataset, test_proper_dataset, test_blurred_dataset
 
 
 def get_cifar100(dataset_path, whether_aug=True, proper_normalization=True):
