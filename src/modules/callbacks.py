@@ -76,7 +76,7 @@ class GatherRepresentationsAndRanksCallback:
             if output.size(1) > 8000:
                 output = output[:, self.subsampling[name]]
             
-            cov_matrix = torch.cov(output)
+            cov_matrix = torch.cov(output.T)
             rank = torch.linalg.matrix_rank(cov_matrix)
             self.ranks[name_dict] = rank
         
