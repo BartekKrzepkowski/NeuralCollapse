@@ -24,17 +24,24 @@ def manual_seed(random_seed, device):
 
 
 def adjust_evaluators(d1, dd2, denom, scope, phase):
+    '''
+    Adoptuje evaluatory z dd2 do d1.
+    Jeżeli klucz kończy się phase (train/valid/test), to sprawdza czy istnieje scope (running/epoch) by upewnić się że doda go właściwie.
+    Jeżeli klucz nie jest podzielony przez "/" to dodaje scope i phase.
+    W przeciwnym przypadku dodaje scope, sprawdzając czy istnieje scope by upewnić się że doda go właściwie.
+    '''
     for evaluator_key in dd2:
-        if 'batch_variance' not in evaluator_key:
-            eval_key = str(evaluator_key).split('/')
-            eval_key = eval_key[0] if len(eval_key) == 1 else '/'.join(eval_key[:-1])
-            eval_key = eval_key.split('_')
+        eval_key = str(evaluator_key).split('/')
+        if 'train' in evaluator_key or 'valid' in evaluator_key or 'test' in evaluator_key:
+            eval_key = '/'.join(eval_key[:-1]).split('_')
             eval_key = '_'.join(eval_key[1:]) if eval_key[0] in {'running', 'epoch'} else '_'.join(eval_key)
             d1[f'{scope}_{eval_key}/{phase}'] += dd2[evaluator_key] * denom
+        elif len(eval_key) == 1:
+            d1[f'{scope}_{eval_key[0]}/{phase}'] += dd2[evaluator_key] * denom
         else:
-            eval_key = evaluator_key
+            eval_key = '/'.join(eval_key).split('_')
+            eval_key = '_'.join(eval_key[1:]) if eval_key[0] in {'running', 'epoch'} else '_'.join(eval_key)
             d1[f'{scope}_{eval_key}'] += dd2[evaluator_key] * denom
-        
     return d1
 
 

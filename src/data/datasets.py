@@ -53,7 +53,7 @@ def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True):
     return train_dataset, test_proper_dataset, test_blurred_dataset
 
 
-def get_cifar100(dataset_path, whether_aug=True, proper_normalization=True):
+def get_cifar100(dataset_path=None, whether_aug=True, proper_normalization=True):
     dataset_path = dataset_path if dataset_path is not None else os.environ['CIFAR100_PATH']
     if proper_normalization:
         mean, std = (0.5071, 0.4865, 0.4409), (0.267, 0.256, 0.276)
@@ -62,6 +62,12 @@ def get_cifar100(dataset_path, whether_aug=True, proper_normalization=True):
     transform_eval = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
+    ])
+    transform_blurred = transforms.Compose([
+        transforms.ToTensor(), 
+        transforms.Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), 
+        transforms.Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None),
+        transforms.Normalize(mean, std)
     ])
     transform_train = transforms.Compose([
         transforms.TrivialAugmentWide(),
@@ -72,13 +78,14 @@ def get_cifar100(dataset_path, whether_aug=True, proper_normalization=True):
     transform_train_2 = transforms.Compose([
         transforms.ToTensor(),
         transforms.RandomAffine(degrees=0, translate=(1/8, 1/8)),
+        transforms.RandomHorizontalFlip(),
         transforms.Normalize(mean, std),
     ])
     transform_train = transform_train_2 if whether_aug else transform_eval
-    train_data = datasets.CIFAR100(dataset_path, train=True, download=DOWNLOAD, transform=transform_train)
-    train_eval_data = datasets.CIFAR100(dataset_path, train=True, download=DOWNLOAD, transform=transform_eval)
-    test_data = datasets.CIFAR100(dataset_path, train=False, download=DOWNLOAD, transform=transform_eval)
-    return train_data, train_eval_data, test_data
+    train_dataset = datasets.CIFAR100(dataset_path, train=True, download=True, transform=transform_train)
+    test_proper_dataset = datasets.CIFAR100(dataset_path, train=False, download=True, transform=transform_eval)
+    test_blurred_dataset = datasets.CIFAR100(dataset_path, train=False, download=True, transform=transform_blurred)
+    return train_dataset, test_proper_dataset, test_blurred_dataset
 
 
 def get_tinyimagenet(proper_normalization=True):

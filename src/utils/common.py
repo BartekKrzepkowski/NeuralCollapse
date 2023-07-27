@@ -1,8 +1,9 @@
 import torch
 
 from src.data.datasets import get_mnist, get_cifar10, get_cifar100, get_tinyimagenet, get_food101
-from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmaxLoss
-from src.modules.architectures.models import MLP, SimpleCNN, MLPwithNorm, SimpleCNNwithNorm
+from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmaxLoss, BADGELoss
+from src.modules.architectures.models import MLP, MLPwithNorm, SimpleCNN, SimpleCNNwithNorm,\
+    SimpleCNNwithDropout, SimpleCNNwithNormandDropout, SimpleCNNwithGroupNorm
 from src.modules.architectures.resnets import ResNet18, ResNet34
 from src.utils.utils_optim import MultiStepwithDoubleLinearWarmup
 from src.visualization.clearml_logger import ClearMLLogger
@@ -37,7 +38,8 @@ LOSS_NAME_MAP = {
     'nll': torch.nn.NLLLoss,
     'mse': torch.nn.MSELoss,
     'mse_softmax': MSESoftmaxLoss,
-    'fp': FisherPenaltyLoss
+    'fp': FisherPenaltyLoss,
+    'badge': BADGELoss,
 }
 
 MODEL_NAME_MAP = {
@@ -45,6 +47,9 @@ MODEL_NAME_MAP = {
     'mlp_with_norm': MLPwithNorm,
     'simple_cnn': SimpleCNN,
     'simple_cnn_with_norm': SimpleCNNwithNorm,
+    'simple_cnn_with_dropout': SimpleCNNwithDropout,
+    'simple_cnn_with_norm_and_dropout': SimpleCNNwithNormandDropout,
+    'simple_cnn_with_groupnorm': SimpleCNNwithGroupNorm,
     'resnet18': ResNet18,
     'resnet34': ResNet34
 }
