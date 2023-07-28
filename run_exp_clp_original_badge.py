@@ -8,7 +8,7 @@ import torch
 from src.utils.prepare import prepare_model, prepare_loaders_clp, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
 from src.utils.utils_visualisation import ee_tensorboard_layout
-from src.trainer.trainer_classification_original_clp import TrainerClassification
+from src.trainer.trainer_classification_original_clp_badge import TrainerClassification
 from src.trainer.trainer_context import TrainerContext
 
 
@@ -27,28 +27,28 @@ def objective(exp, window, epochs):
     EPOCHS = epochs
     GRAD_ACCUM_STEPS = 1
     CLIP_VALUE = 100.0
-    FP = 0.0#1e-2
+    BADGE_COEFF = 0.0
     WD = 0.0
     LR = 2e-1
 
     # prepare params
     type_names = {
-        'model': 'simple_cnn_with_groupnorm',
-        'criterion': 'fp',
+        'model': 'simple_cnn',
+        'criterion': 'badge',
         'dataset': 'cifar10',
         'optim': 'sgd',
         'scheduler': None
     }
     # wandb params
-    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_fp_{FP}_lr_{LR}_wd_{WD}, original_clp'
-    EXP_NAME = f'{GROUP_NAME}_window_{window}_adjusted, stiffness, dead relu, group=all'
+    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_badge_coeff_{BADGE_COEFF}_lr_{LR}, original_clp'
+    EXP_NAME = f'{GROUP_NAME}_window_{window}, badge'
     PROJECT_NAME = 'Critical_Periods_lr'
     ENTITY_NAME = 'ideas_cv'
 
     h_params_overall = {
         'model': {'layers_dim': DIMS, 'activation_name': 'relu', 'conv_params': CONV_PARAMS},
-        'criterion': {'model': None, 'general_criterion_name': 'ce', 'num_classes': NUM_CLASSES,
-                      'whether_record_trace': False, 'fpw': FP},
+        'criterion': {'model': None, 'general_criterion_name': 'ce',
+                      'whether_record_logdet': True, 'badge_coeff': BADGE_COEFF, 'normalize': False},
         'dataset': {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True},
         'loaders': {'batch_size': 200, 'pin_memory': True, 'num_workers': 8},
         'optim': {'lr': LR, 'momentum': 0.0, 'weight_decay': WD},
@@ -98,7 +98,7 @@ def objective(exp, window, epochs):
         grad_accum_steps=GRAD_ACCUM_STEPS,
         save_multi=0,#T_max // 10,
         log_multi=1,#(T_max // EPOCHS) // 10,
-        stiff_multi=(T_max // (window + epochs)) // 2,
+        stiff_multi=0,#(T_max // (window + epochs)) // 2,
         clip_value=CLIP_VALUE,
         base_path='reports',
         exp_name=EXP_NAME,

@@ -11,4 +11,4 @@
 source $HOME/miniconda3/etc/profile.d/conda.sh
 conda activate $HOME/miniconda3/envs/clp_env
 
-WANDB__SERVICE_WAIT=300 python3 -u run_exp_clp_original.py
+WANDB__SERVICE_WAIT=300 python3 -u run_exp_clp_original_new_layout_mlp.py

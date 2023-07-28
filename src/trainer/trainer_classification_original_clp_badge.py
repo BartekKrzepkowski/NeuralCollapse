@@ -5,20 +5,16 @@ import torch
 from tqdm import tqdm, trange
 
 from src.data.loaders import Loaders
+from src.modules.metrics import RunStats
 from src.utils.common import LOGGERS_NAME_MAP
-
-from src.modules.aux import TimerCPU
+from src.modules.metrics import Stiffness
+from src.modules.hooks import Hooks
 from src.utils.utils_trainer import adjust_evaluators, adjust_evaluators_pre_log, create_paths, save_model
 from src.utils.utils_optim import clip_grad_norm
 
 
-def froze_model(model, is_true):
-    for para in model.parameters():
-        para.requires_grad = is_true
-
-
 class TrainerClassification:
-    def __init__(self, model, criterion, loaders, optim, lr_scheduler, extra_modules, device):
+    def __init__(self, model, criterion, loaders, optim, lr_scheduler, extra):
         self.model = model
         self.criterion = criterion
         self.loaders = loaders
@@ -31,10 +27,8 @@ class TrainerClassification:
         self.epoch = None
         self.global_step = None
 
-        self.extra_modules = extra_modules
-        self.timer = TimerCPU()
-        self.device = device
-        
+        self.run_stats = RunStats(model, optim)
+        self.stiffness = Stiffness(model, **extra)
 
     def run_exp1(self, config):
         batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
@@ -127,13 +121,11 @@ class TrainerClassification:
             self.model.train()
             self.run_epoch(phase='train', config=config)
             self.model.eval()
-            with torch.no_grad():
-                self.extra_modules['hooks_dead_relu'].disable()
-                self.extra_modules['hooks_acts'].disable()
-                self.run_epoch(phase='test_proper', config=config)
-                self.run_epoch(phase='test_blurred', config=config)
-                self.extra_modules['hooks_dead_relu'].enable()
-                self.extra_modules['hooks_acts'].enable()
+            # with torch.no_grad():
+                # self.hooks.disable()
+            self.run_epoch(phase='test_proper', config=config)
+            self.run_epoch(phase='test_blurred', config=config)
+                # self.hooks.enable()
 
     def at_exp_start(self, config):
         """
@@ -143,16 +135,9 @@ class TrainerClassification:
         self.base_path, self.save_path = create_paths(config.base_path, config.exp_name)
         config.logger_config['log_dir'] = f'{self.base_path}/{config.logger_config["logger_name"]}'
         self.logger = LOGGERS_NAME_MAP[config.logger_config['logger_name']](config)
-        
-        self.timer.set_logger(self.logger)
-        
-        if 'stiffness' in self.extra_modules:
-            self.extra_modules['stiffness'].logger = self.logger
-        if 'hooks_dead_relu' in self.extra_modules:
-            self.extra_modules['hooks_dead_relu'].logger = self.logger
-        if 'hooks_acts' in self.extra_modules:
-            self.extra_modules['hooks_acts'].logger = self.logger
-        
+        # self.stiffness.logger = self.logger
+        # self.hooks = Hooks(self.model, self.logger, 'dead_relu')
+        # self.hooks.register_hooks([torch.nn.ReLU])
 
     def run_epoch(self, phase, config):
         """
@@ -176,77 +161,42 @@ class TrainerClassification:
                             leave=False, position=1, total=loader_size, colour='red', disable=config.whether_disable_tqdm)
         self.global_step = self.epoch * loader_size
         for i, data in enumerate(progress_bar):
-            self.extra_modules['run_stats'].update_checkpoint(global_step=self.global_step)# można kopiować model jedynie przed utworzeniem grafu
             self.global_step += 1
-            
             x_true, y_true = data
-            x_true, y_true = x_true.to(self.device), y_true.to(self.device)
-            
-            self.timer.start('forward')
-            y_pred = self.model(x_true)
-            self.timer.stop()
-            
-            self.timer.start('criterion')
-            loss, evaluators, traces = self.criterion(y_pred, y_true)
-            self.timer.stop()
-            
+            x_true, y_true = x_true.to(config.device), y_true.to(config.device)
+            # y_pred = self.model(x_true)
+            loss, evaluators, traces = self.criterion(x_true, y_true)
             step_assets = {
                 'evaluators': evaluators,
                 'denom': y_true.size(0),
                 'traces': traces
             }
-            
-            
             if 'train' == phase:
                 loss /= config.grad_accum_steps
-                loss.backward(retain_graph=True)
+                loss.backward()
                 if (i + 1) % config.grad_accum_steps == 0 or (i + 1) == loader_size:
                     if config.clip_value > 0:
                         norm = clip_grad_norm(torch.nn.utils.clip_grad_norm_, self.model, config.clip_value)
                         step_assets['evaluators']['run_stats/model_gradient_norm_squared_from_pytorch'] = norm.item() ** 2
-                    
                     self.optim.step()
+                    if self.run_stats is not None:
+                        step_assets['evaluators'] = self.run_stats(step_assets['evaluators'], 'l2')
                     if self.lr_scheduler is not None:
                         self.lr_scheduler.step()
-                        
-                    if self.extra_modules['run_stats'] is not None:
-                        self.timer.start('run_stats')
-                        step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
-                        self.timer.stop()
-                        
                     self.optim.zero_grad()
-                    
-                    if self.extra_modules['hooks_acts'] is not None and self.extra_modules['probes'] is not None:
-                        froze_model(self.model, False)
-                        reprs = self.extra_modules['hooks_acts'].callback.activations
-                        self.timer.start('probes')
-                        evaluators = self.extra_modules['probes'](reprs, y_true, evaluators)
-                        self.timer.stop()
-                        froze_model(self.model, True)
+                else: # problem z tym że nie przy nie aktualizacji gradientu nie ma sensu liczyć długości trajektorii
+                    if self.run_stats is not None:
+                        norm = self.run_stats.model_gradient_norm()
+                        step_assets['evaluators']['run_stats/model_gradient_norm_squared_overall'] = norm ** 2
                 loss *= config.grad_accum_steps
-                
-                if config.stiff_multi and self.global_step % (config.grad_accum_steps * config.stiff_multi) == 0 and self.extra_modules['stiffness'] is not None:
-                    self.extra_modules['hooks_dead_relu'].disable()
-                    self.extra_modules['stiffness'].log_stiffness(self.global_step)
-                    self.extra_modules['hooks_dead_relu'].enable()
-                
-                if config.acts_rank_multi:
-                    if self.global_step % (config.grad_accum_steps * config.acts_rank_multi) == 0 and self.extra_modules['hooks_acts'] is not None :
-                        self.timer.start('hooks_acts')
-                        self.extra_modules['hooks_acts'].write_to_tensorboard(self.global_step)
-                        self.timer.stop()
-                    self.extra_modules['hooks_acts'].reset()
-                if self.extra_modules['hooks_dead_relu'] is not None:
-                    self.timer.start('hooks_dead_relu')
-                    self.extra_modules['hooks_dead_relu'].write_to_tensorboard(self.global_step)
-                    self.timer.stop()
+                if config.stiff_multi and self.global_step % (config.grad_accum_steps * config.stiff_multi) == 0:
+                    self.hooks.disable()
+                    self.stiffness.log_stiffness(self.global_step)
+                    self.hooks.enable()
+                # if self.hooks is not None:
+                #     self.hooks.write_to_tensorboard(self.global_step)
             
-            
-            # ════════════════════════ logging ════════════════════════ #
-            
-            self.timer.log(self.global_step)
-            
-            
+            ### LOGGING ###
             running_assets = self.update_assets(running_assets, step_assets, step_assets['denom'], 'running', phase)
 
             whether_save_model = config.save_multi and (i + 1) % (config.grad_accum_steps * config.save_multi) == 0
@@ -320,7 +270,7 @@ class TrainerClassification:
         random.seed(config.random_seed)
         np.random.seed(config.random_seed)
         torch.manual_seed(config.random_seed)
-        if 'cuda' in self.device.type:
+        if 'cuda' in config.device.type:
             torch.cuda.empty_cache()
             torch.cuda.manual_seed_all(config.random_seed)
             # torch.backends.cudnn.deterministic = True

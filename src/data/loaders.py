@@ -56,6 +56,10 @@ class Loaders(object):
             transform = Compose([ToTensor(), Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None),
                                 RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(), Normalize(mean, std)])
             train_dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=True, transform=transform, download=True)
+        elif self.dataset_name == 'cifar100':
+            transform = Compose([ToTensor(), Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None),
+                                RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(), Normalize(mean, std)])
+            train_dataset = datasets.CIFAR100(root=os.environ['CIFAR100_PATH'], train=is_train, transform=transform, download=True)
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Resize(8, interpolation=InterpolationMode.BILINEAR), Resize(32, interpolation=InterpolationMode.BILINEAR), Normalize((0.5,), (0.5,))])
             train_dataset = datasets.MNIST(root=os.environ['MNIST_PATH'], train=True, transform=transform, download=True)
@@ -69,6 +73,10 @@ class Loaders(object):
             transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
                                  Normalize(mean, std)])
             train_dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=is_train, transform=transform, download=True)
+        elif self.dataset_name == 'cifar100':
+            transform = Compose([ToTensor(), RandomAffine(degrees=0, translate=(1/8, 1/8)), RandomHorizontalFlip(),
+                                 Normalize(mean, std)])
+            train_dataset = datasets.CIFAR100(root=os.environ['CIFAR100_PATH'], train=is_train, transform=transform, download=True)
         elif self.dataset_name == 'mnist':
             transform = Compose([ToTensor(), Pad(2), Normalize((0.5,), (0.5,))])
             train_dataset = datasets.MNIST(root=os.environ['MNIST_PATH'], train=is_train, transform=transform, download=True)
