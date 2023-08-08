@@ -11,7 +11,8 @@ class MLP(torch.nn.Module):
     def __init__(self, layers_dim: List[int], activation_name: str):
         super().__init__()
         self.layers = torch.nn.ModuleList([
-            torch.nn.Sequential(torch.nn.Linear(hidden_dim1, hidden_dim2), common.ACT_NAME_MAP[activation_name]())
+            torch.nn.Sequential(torch.nn.Linear(hidden_dim1, hidden_dim2),
+                                common.ACT_NAME_MAP[activation_name]())
             for hidden_dim1, hidden_dim2 in zip(layers_dim[:-2], layers_dim[1:-1])
         ])
         self.final_layer = torch.nn.Linear(layers_dim[-2], layers_dim[-1])
@@ -46,6 +47,25 @@ class MLPwithNorm(torch.nn.Module):
         self.layers = torch.nn.ModuleList([
             torch.nn.Sequential(torch.nn.Linear(hidden_dim1, hidden_dim2),
                                 torch.nn.BatchNorm1d(hidden_dim2),
+                                common.ACT_NAME_MAP[activation_name]())
+            for hidden_dim1, hidden_dim2 in zip(layers_dim[:-2], layers_dim[1:-1])
+        ])
+        self.final_layer = torch.nn.Linear(layers_dim[-2], layers_dim[-1])
+
+    def forward(self, x):
+        x = x.flatten(start_dim=1)
+        for layer in self.layers:
+            x = layer(x)
+        x = self.final_layer(x)
+        return x
+    
+
+class MLPwithDropout(torch.nn.Module):
+    def __init__(self, layers_dim: List[int], activation_name: str):
+        super().__init__()
+        self.layers = torch.nn.ModuleList([
+            torch.nn.Sequential(torch.nn.Linear(hidden_dim1, hidden_dim2),
+                                torch.nn.Dropout(p=0.15),
                                 common.ACT_NAME_MAP[activation_name]())
             for hidden_dim1, hidden_dim2 in zip(layers_dim[:-2], layers_dim[1:-1])
         ])

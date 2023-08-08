@@ -2,7 +2,7 @@ import torch
 
 from src.data.datasets import get_mnist, get_cifar10, get_cifar100, get_tinyimagenet, get_food101
 from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmaxLoss, BADGELoss
-from src.modules.architectures.models import MLP, MLPwithNorm, SimpleCNN, SimpleCNNwithNorm,\
+from src.modules.architectures.models import MLP, MLPwithNorm, MLPwithDropout, SimpleCNN, SimpleCNNwithNorm,\
     SimpleCNNwithDropout, SimpleCNNwithNormandDropout, SimpleCNNwithGroupNorm
 from src.modules.architectures.resnets import ResNet18, ResNet34
 from src.utils.utils_optim import MultiStepwithDoubleLinearWarmup
@@ -45,6 +45,7 @@ LOSS_NAME_MAP = {
 MODEL_NAME_MAP = {
     'mlp': MLP,
     'mlp_with_norm': MLPwithNorm,
+    'mlp_with_dropout': MLPwithDropout,
     'simple_cnn': SimpleCNN,
     'simple_cnn_with_norm': SimpleCNNwithNorm,
     'simple_cnn_with_dropout': SimpleCNNwithDropout,

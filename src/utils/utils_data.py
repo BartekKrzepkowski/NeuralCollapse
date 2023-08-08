@@ -57,10 +57,35 @@ def get_mean_std_3(dataloader):
 
 from torchvision.transforms import Compose, Resize, ToTensor
 from torchvision.transforms import InterpolationMode
-transform_basic = Compose([ToTensor()])
-# tensor([0.4909, 0.4816, 0.4459]) tensor([0.2162, 0.2135, 0.2342])
-transform_blurred = Compose([ToTensor(), Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None)])
-dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=True, download=True, transform=transform_blurred)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=2)
-mean, std = get_mean_std_3(dataloader)
-print(mean, std)
+# transform_basic = Compose([ToTensor()])
+# # tensor([0.4909, 0.4816, 0.4459]) tensor([0.2162, 0.2135, 0.2342])
+# transform_blurred = Compose([ToTensor(), Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None)])
+# dataset = datasets.CIFAR10(root=os.environ['CIFAR10_PATH'], train=True, download=True, transform=transform_blurred)
+# dataloader = DataLoader(dataset, batch_size=32, shuffle=False, num_workers=2)
+# mean, std = get_mean_std_3(dataloader)
+# print(mean, std)
+
+
+from src.utils import common
+
+def get_held_out_data(dataset_name, nb_samples=50):
+    train_dataset, _, _ = common.DATASET_NAME_MAP[dataset_name]()
+    x_data = np.array(train_dataset.data)
+    y_data = np.array(train_dataset.targets)
+    num_classes = len(np.unique(y_data))
+    nb_samples_per_class = nb_samples // num_classes
+    idxs = []
+    for i in range(num_classes):
+        idxs_i = np.where(y_data == i)[0]
+        sampled_idxs_i = np.random.choice(idxs_i, size=nb_samples_per_class, replace=False)
+        idxs.append(sampled_idxs_i)
+        
+    idxs = np.concatenate(idxs)
+    x_data = x_data[idxs]
+    y_data = y_data[idxs]
+    
+    if not os.path.exists('data'):
+        os.mkdir('data')
+    np.save(f'data/{dataset_name}_held_out_x.npy', x_data)
+    np.save(f'data/{dataset_name}_held_out_y.npy', y_data)
+    return x_data, y_data

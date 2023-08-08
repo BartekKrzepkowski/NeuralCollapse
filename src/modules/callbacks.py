@@ -54,7 +54,7 @@ class GatherRepresentationsAndRanksCallback:
         self.activations = []
         self.ranks = {}
         self.idx = 0
-        self.is_able = True
+        self.is_able = False
         self.subsampling = defaultdict(lambda: None)
 
     def __call__(self, module, input, output):
@@ -97,5 +97,5 @@ class GatherRepresentationsAndRanksCallback:
 
 CALLBACK_TYPE = {
     'dead_relu': DeadActivationCallback,
-    'gather_activations': GatherRepresentationsAndRanksCallback,
+    'gather_reprs': GatherRepresentationsAndRanksCallback,
     }
