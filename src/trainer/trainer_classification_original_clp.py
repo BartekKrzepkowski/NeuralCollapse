@@ -114,7 +114,6 @@ class TrainerClassification:
             config (dict): Consists of:
                 epoch_start (int): A number representing the beginning of run
                 epoch_end (int): A number representing the end of run
-                grad_accum_steps (int):
                 step_multi (int):
                 base_path (str): Base path
                 exp_name (str): Base name of experiment
@@ -128,12 +127,8 @@ class TrainerClassification:
             self.run_epoch(phase='train', config=config)
             self.model.eval()
             with torch.no_grad():
-                self.extra_modules['hooks_dead_relu'].disable()
-                self.extra_modules['hooks_acts'].disable()
                 self.run_epoch(phase='test_proper', config=config)
                 self.run_epoch(phase='test_blurred', config=config)
-                self.extra_modules['hooks_dead_relu'].enable()
-                self.extra_modules['hooks_acts'].enable()
 
     def at_exp_start(self, config):
         """
@@ -152,6 +147,10 @@ class TrainerClassification:
             self.extra_modules['hooks_dead_relu'].logger = self.logger
         if 'hooks_acts' in self.extra_modules:
             self.extra_modules['hooks_acts'].logger = self.logger
+        if 'tunnel' in self.extra_modules:
+            self.extra_modules['tunnel'].logger = self.logger
+        if 'trace_fim' in self.extra_modules:
+            self.extra_modules['trace_fim'].logger = self.logger
         
 
     def run_epoch(self, phase, config):
@@ -176,7 +175,7 @@ class TrainerClassification:
                             leave=False, position=1, total=loader_size, colour='red', disable=config.whether_disable_tqdm)
         self.global_step = self.epoch * loader_size
         for i, data in enumerate(progress_bar):
-            self.extra_modules['run_stats'].update_checkpoint(global_step=self.global_step)# można kopiować model jedynie przed utworzeniem grafu
+            # self.extra_modules['run_stats'].update_checkpoint(global_step=self.global_step)# można kopiować model jedynie przed utworzeniem grafu
             self.global_step += 1
             
             x_true, y_true = data
@@ -196,50 +195,64 @@ class TrainerClassification:
                 'traces': traces
             }
             
-            
             if 'train' == phase:
-                loss /= config.grad_accum_steps
                 loss.backward(retain_graph=True)
-                if (i + 1) % config.grad_accum_steps == 0 or (i + 1) == loader_size:
-                    if config.clip_value > 0:
-                        norm = clip_grad_norm(torch.nn.utils.clip_grad_norm_, self.model, config.clip_value)
-                        step_assets['evaluators']['run_stats/model_gradient_norm_squared_from_pytorch'] = norm.item() ** 2
-                    
-                    self.optim.step()
-                    if self.lr_scheduler is not None:
-                        self.lr_scheduler.step()
-                        
-                    if self.extra_modules['run_stats'] is not None:
-                        self.timer.start('run_stats')
-                        step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
-                        self.timer.stop()
-                        
-                    self.optim.zero_grad()
-                    
-                    if self.extra_modules['hooks_acts'] is not None and self.extra_modules['probes'] is not None:
-                        froze_model(self.model, False)
-                        reprs = self.extra_modules['hooks_acts'].callback.activations
-                        self.timer.start('probes')
-                        evaluators = self.extra_modules['probes'](reprs, y_true, evaluators)
-                        self.timer.stop()
-                        froze_model(self.model, True)
-                loss *= config.grad_accum_steps
+                if config.clip_value > 0:
+                    norm = clip_grad_norm(torch.nn.utils.clip_grad_norm_, self.model, config.clip_value)
+                    step_assets['evaluators']['run_stats/model_gradient_norm_squared_from_pytorch'] = norm.item() ** 2
                 
-                if config.stiff_multi and self.global_step % (config.grad_accum_steps * config.stiff_multi) == 0 and self.extra_modules['stiffness'] is not None:
-                    self.extra_modules['hooks_dead_relu'].disable()
-                    self.extra_modules['stiffness'].log_stiffness(self.global_step)
-                    self.extra_modules['hooks_dead_relu'].enable()
+                self.optim.step()
+                if self.lr_scheduler is not None:
+                    self.lr_scheduler.step()
+                    
+                # if self.extra_modules['run_stats'] is not None:
+                #     self.timer.start('run_stats')
+                #     step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
+                #     self.timer.stop()
+                    
+                self.optim.zero_grad()
                 
-                if config.acts_rank_multi:
-                    if self.global_step % (config.grad_accum_steps * config.acts_rank_multi) == 0 and self.extra_modules['hooks_acts'] is not None :
-                        self.timer.start('hooks_acts')
-                        self.extra_modules['hooks_acts'].write_to_tensorboard(self.global_step)
-                        self.timer.stop()
-                    self.extra_modules['hooks_acts'].reset()
-                if self.extra_modules['hooks_dead_relu'] is not None:
-                    self.timer.start('hooks_dead_relu')
-                    self.extra_modules['hooks_dead_relu'].write_to_tensorboard(self.global_step)
+                if config.fim_trace_multi and self.global_step % config.fim_trace_multi == 0 and self.extra_modules['trace_fim'] is not None:
+                    self.timer.start('trace_fim')
+                    self.extra_modules['trace_fim'](self.global_step)
                     self.timer.stop()
+                
+                if config.tunnel_multi and self.global_step % config.tunnel_multi == 0 and self.extra_modules['tunnel'] is not None:
+                    froze_model(self.model, False)
+                    self.extra_modules['hooks_reprs'].enable()
+                    self.timer.start('tunnel')
+                    self.extra_modules['tunnel'](self.global_step, loader_size * 25)
+                    self.timer.stop()
+                    self.extra_modules['hooks_reprs'].disable()
+                    froze_model(self.model, True)
+                    
+                
+                # if self.extra_modules['hooks_acts'] is not None and self.extra_modules['probes'] is not None:
+                #     froze_model(self.model, False)
+                #     reprs = self.extra_modules['hooks_acts'].callback.activations
+                #     self.timer.start('probes')
+                #     evaluators = self.extra_modules['probes'](reprs, y_true, evaluators)
+                #     self.timer.stop()
+                #     froze_model(self.model, True)
+                
+                # stiffness
+                # if config.stiff_multi and self.global_step % (config.grad_accum_steps * config.stiff_multi) == 0 and self.extra_modules['stiffness'] is not None:
+                #     self.extra_modules['hooks_dead_relu'].disable()
+                #     self.extra_modules['stiffness'].log_stiffness(self.global_step)
+                #     self.extra_modules['hooks_dead_relu'].enable()
+                
+                # actively (batch-wise) gather reprs and its ranks
+                # if config.acts_rank_multi:
+                #     if self.global_step % (config.grad_accum_steps * config.acts_rank_multi) == 0 and self.extra_modules['hooks_acts'] is not None :
+                #         self.timer.start('hooks_acts')
+                #         self.extra_modules['hooks_acts'].write_to_tensorboard(self.global_step)
+                #         self.timer.stop()
+                #     self.extra_modules['hooks_acts'].reset()
+                # gather dead relu ratio per layer
+                # if self.extra_modules['hooks_dead_relu'] is not None:
+                #     self.timer.start('hooks_dead_relu')
+                #     self.extra_modules['hooks_dead_relu'].write_to_tensorboard(self.global_step)
+                #     self.timer.stop()
             
             
             # ════════════════════════ logging ════════════════════════ #
@@ -249,8 +262,8 @@ class TrainerClassification:
             
             running_assets = self.update_assets(running_assets, step_assets, step_assets['denom'], 'running', phase)
 
-            whether_save_model = config.save_multi and (i + 1) % (config.grad_accum_steps * config.save_multi) == 0
-            whether_log = (i + 1) % (config.grad_accum_steps * config.log_multi) == 0
+            whether_save_model = config.save_multi and (i + 1) % config.save_multi == 0
+            whether_log = (i + 1) % config.log_multi == 0
             whether_epoch_end = (i + 1) == loader_size
 
             if whether_save_model and 'train' in phase:

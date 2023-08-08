@@ -1,19 +1,21 @@
 import os
 
 import wandb
+from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 
 
 class TensorboardPyTorch:
     def __init__(self, config):
         self.whether_use_wandb = config.logger_config['whether_use_wandb']
+        os.makedirs(config.logger_config['log_dir'])
         if self.whether_use_wandb:
             wandb.login(key=os.environ['WANDB_API_KEY'])
             wandb.init(
-                entity=config.logger_config['entity'] if config.logger_config['entity'] else os.environ['WANDB_ENTITY'],
+                entity=config.logger_config['entity'] if config.logger_config['entity'] is not None else os.environ['WANDB_ENTITY'],
                 project=config.logger_config['project_name'],
                 name=config.exp_name,
-                config=config.logger_config['hyperparameters'],
+                config=OmegaConf.to_container(config, resolve=True),
                 dir=config.logger_config['log_dir'],
                 mode=config.logger_config['mode'],
                 # group=config.logger_config['group'],
@@ -22,9 +24,9 @@ class TensorboardPyTorch:
                 wandb.tensorboard.unpatch()
             wandb.tensorboard.patch(root_logdir=config.logger_config['log_dir'], pytorch=True, save=False)
             
-        self.writer = SummaryWriter(log_dir=config.logger_config['log_dir'], flush_secs=60)
-        if 'layout' in config.logger_config:
-            self.writer.add_custom_scalars(config.logger_config['layout'])
+        self.writer = SummaryWriter(log_dir=config.logger_config['log_dir'])
+        # if 'layout' in config.logger_config:
+        #     self.writer.add_custom_scalars(config.logger_config['layout'])
 
 
     def close(self):
@@ -40,20 +42,16 @@ class TensorboardPyTorch:
         if self.whether_use_wandb:
             wandb.watch(model, log_freq=1000, idx=0, log_graph=True, log='all', criterion=criterion)
         self.writer.add_graph(model, inp)
-        self.flush()
         
     def log_figures(self, images, global_step):
         for tag in images:
             self.writer.add_figure(tag, images[tag], global_step=global_step)
-        self.flush()
 
     def log_histogram(self, values, global_step): # problem with numpy=1.24.0
         for tag in values:
             self.writer.add_histogram(tag, values[tag], global_step=global_step)
-        self.flush()
 
     def log_scalars(self, scalar_dict, global_step):
         for tag in scalar_dict:
             self.writer.add_scalar(tag, scalar_dict[tag], global_step=global_step)
-        self.flush()
 

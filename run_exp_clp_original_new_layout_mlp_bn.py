@@ -28,7 +28,7 @@ def objective(exp, window, epochs):
     RANDOM_SEED = 83
     
     type_names = {
-        'model': 'mlp',
+        'model': 'mlp_with_norm',
         'criterion': 'fp',
         'dataset': 'cifar10',
         'optim': 'sgd',
