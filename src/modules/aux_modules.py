@@ -1,8 +1,11 @@
+from collections import defaultdict
 from copy import deepcopy
 
 import torch
+from torch.distributions import Categorical
 
 from src.utils import prepare
+from src.utils.utils_optim import get_every_but_forbidden_parameter_names, FORBIDDEN_LAYER_TYPES
 
 
 class TunnelandProbing(torch.nn.Module):
@@ -67,7 +70,6 @@ class TunnelandProbing(torch.nn.Module):
                     rep = reprs[i][1]
                     output = head(rep)
                     loss = self.criterion(output, y_train)
-                    # acc = (torch.argmax(output, dim=1) == y_train).float().mean()
                     losses_train.append(loss)
             
                 loss = sum(losses_train) / len(losses_train)
@@ -91,7 +93,7 @@ class TunnelandProbing(torch.nn.Module):
             
         accs_epoch = torch.tensor(accs_epoch).max(dim=0)[0].reshape(-1)
         losses_epoch = torch.tensor(losses_epoch).max(dim=0)[0].reshape(-1)
-        self.prepare_evaluators(evaluators, accs_epoch, losses_epoch) # interesują mnie jedynie wyniki ostatniej epoki
+        self.prepare_evaluators(evaluators, accs_epoch, losses_epoch)
         
         evaluators['steps/tunnel'] = step
         self.logger.log_scalars(evaluators, step)
@@ -108,10 +110,7 @@ class TunnelandProbing(torch.nn.Module):
             evaluators[f'linear_probing/accuracy_{i}'] = accs[i].item()
             evaluators[f'linear_probing/loss_{i}'] = losses[i].item()
 
-from torch.distributions import Categorical
-from collections import defaultdict
 
-from src.utils.utils_optim import get_every_but_forbidden_parameter_names, FORBIDDEN_LAYER_TYPES
 class TraceFIM(torch.nn.Module):
     def __init__(self, x_held_out, model, criterion, num_classes):
         super().__init__()
@@ -135,7 +134,6 @@ class TraceFIM(torch.nn.Module):
             # create_graph=True)
         evaluators = defaultdict(float)
         overall_trace = 0.0
-        # najlepiej rozdzielić po module
         for param_name, gr in zip(params_names, grads):
             if gr is not None:
                 trace_p = (gr**2).sum()
