@@ -14,4 +14,5 @@ conda activate $HOME/miniconda3/envs/clpi_env
 CUDA_VISIBLE_DEVICES=0 python3 -u $1.py &
 CUDA_VISIBLE_DEVICES=0 python3 -u $2.py &
 CUDA_VISIBLE_DEVICES=0 python3 -u $3.py &
+CUDA_VISIBLE_DEVICES=0 python3 -u $4.py &
 wait

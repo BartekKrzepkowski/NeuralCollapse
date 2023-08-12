@@ -176,7 +176,6 @@ class TrainerClassification:
         self.global_step = self.epoch * loader_size
         for i, data in enumerate(progress_bar):
             # self.extra_modules['run_stats'].update_checkpoint(global_step=self.global_step)# można kopiować model jedynie przed utworzeniem grafu
-            self.global_step += 1
             
             x_true, y_true = data
             x_true, y_true = x_true.to(self.device), y_true.to(self.device)
@@ -210,7 +209,7 @@ class TrainerClassification:
                 #     step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
                 #     self.timer.stop()
                     
-                self.optim.zero_grad()
+                self.optim.zero_grad(set_to_none=True)
                 
                 if config.fim_trace_multi and self.global_step % config.fim_trace_multi == 0 and self.extra_modules['trace_fim'] is not None:
                     self.timer.start('trace_fim')
@@ -221,7 +220,7 @@ class TrainerClassification:
                     froze_model(self.model, False)
                     self.extra_modules['hooks_reprs'].enable()
                     self.timer.start('tunnel')
-                    self.extra_modules['tunnel'](self.global_step, loader_size * 25)
+                    self.extra_modules['tunnel'](self.global_step, loader_size * 40)
                     self.timer.stop()
                     self.extra_modules['hooks_reprs'].disable()
                     froze_model(self.model, True)
@@ -280,6 +279,8 @@ class TrainerClassification:
 
             if whether_epoch_end:
                 self.log(epoch_assets, phase, 'epoch', progress_bar, self.epoch)
+
+            self.global_step += 1
 
     def log(self, assets: Dict, phase: str, scope: str, progress_bar: tqdm, step: int):
         '''
