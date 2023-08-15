@@ -31,7 +31,7 @@ class TunnelandProbing(torch.nn.Module):
         with torch.no_grad():
             _ = self.model(x_test)
         representations_test = self.hooks_reprs.callback.activations
-        named_weights = [(n, p.reshape(p.size(0), -1)) for n, p in self.model.named_parameters() if p.requires_grad and 'weight' in name]
+        named_weights = [(n, p.reshape(p.size(0), -1)) for n, p in self.model.named_parameters() if 'weight' in n]
         self.hooks_reprs.reset()
         evaluators = {}
         
@@ -108,7 +108,8 @@ class TunnelandProbing(torch.nn.Module):
         
     def prepare_and_calculate_ranks(self, representations, evaluators, prefix):
         streams = [torch.cuda.Stream() for _ in representations] if self.device.type == 'cuda' else [None for _ in representations]
-        ranks = [self.calculate_rank(name, matrix, stream) for (name, matrix), stream in zip(representations, streams)]
+        transpose = False if 'weight' in prefix else True
+        ranks = [self.calculate_rank(name, matrix, stream, transpose) for (name, matrix), stream in zip(representations, streams)]
         if self.device.type == 'cuda':
             [stream.synchronize() for stream in streams]
         for i, (name, matrix) in enumerate(representations):
@@ -121,12 +122,13 @@ class TunnelandProbing(torch.nn.Module):
         return evaluators
 
 
-    def calculate_rank(self, name, matrix, stream):
+    def calculate_rank(self, name, matrix, stream, transpose):
         with torch.cuda.stream(stream):
             matrix = matrix.data.detach()
-            if matrix.size(1) > 8000:
-                matrix = matrix[:, self.hooks_reprs.callback.subsampling[name]]
-            cov_matrix = torch.cov(matrix.T)
+            matrix = matrix.T if transpose else matrix
+            if matrix.size(0) > 8000:
+                matrix = matrix[self.hooks_reprs.callback.subsampling[name]]
+            cov_matrix = torch.cov(matrix)
             rank = torch.linalg.matrix_rank(cov_matrix).item()
         return rank
 
