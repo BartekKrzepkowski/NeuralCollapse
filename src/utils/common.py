@@ -5,6 +5,7 @@ from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmax
 from src.modules.architectures.models import MLP, MLPwithNorm, MLPwithDropout, SimpleCNN, SimpleCNNwithNorm,\
     SimpleCNNwithDropout, SimpleCNNwithNormandDropout, SimpleCNNwithGroupNorm
 from src.modules.architectures.resnets import ResNet18, ResNet34
+from src.modules.architectures.resnets_tunnel import build_resnet
 from src.utils.utils_optim import MultiStepwithDoubleLinearWarmup
 from src.visualization.clearml_logger import ClearMLLogger
 from src.visualization.tensorboard_pytorch import TensorboardPyTorch
@@ -52,7 +53,8 @@ MODEL_NAME_MAP = {
     'simple_cnn_with_norm_and_dropout': SimpleCNNwithNormandDropout,
     'simple_cnn_with_groupnorm': SimpleCNNwithGroupNorm,
     'resnet18': ResNet18,
-    'resnet34': ResNet34
+    'resnet34': ResNet34,
+    'resnet_tunnel': build_resnet
 }
 
 NORM_LAYER_NAME_MAP = {

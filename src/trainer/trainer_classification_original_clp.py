@@ -19,7 +19,7 @@ def froze_model(model, is_true):
 
 class TrainerClassification:
     def __init__(self, model, criterion, loaders, optim, lr_scheduler, extra_modules, device):
-        self.model = model
+        self.model = model#torch.compile(model, mode="reduce-overhead")
         self.criterion = criterion
         self.loaders = loaders
         self.optim = optim
@@ -124,11 +124,15 @@ class TrainerClassification:
                             leave=True, position=0, colour='green', disable=config.whether_disable_tqdm):
             self.epoch = epoch
             self.model.train()
+            self.timer.start('train_epoch')
             self.run_epoch(phase='train', config=config)
+            self.timer.stop('train_epoch')
             self.model.eval()
             with torch.no_grad():
                 self.run_epoch(phase='test_proper', config=config)
                 self.run_epoch(phase='test_blurred', config=config)
+                
+            self.timer.log(epoch)
 
     def at_exp_start(self, config):
         """
@@ -182,11 +186,11 @@ class TrainerClassification:
             
             self.timer.start('forward')
             y_pred = self.model(x_true)
-            self.timer.stop()
+            self.timer.stop('forward')
             
             self.timer.start('criterion')
             loss, evaluators, traces = self.criterion(y_pred, y_true)
-            self.timer.stop()
+            self.timer.stop('criterion')
             
             step_assets = {
                 'evaluators': evaluators,
@@ -207,21 +211,22 @@ class TrainerClassification:
                 # if self.extra_modules['run_stats'] is not None:
                 #     self.timer.start('run_stats')
                 #     step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
-                #     self.timer.stop()
+                #     self.timer.stop('run_stats')
                     
                 self.optim.zero_grad(set_to_none=True)
                 
                 if config.fim_trace_multi and self.global_step % config.fim_trace_multi == 0 and self.extra_modules['trace_fim'] is not None:
                     self.timer.start('trace_fim')
                     self.extra_modules['trace_fim'](self.global_step)
-                    self.timer.stop()
+                    self.timer.stop('trace_fim')
                 
-                if config.tunnel_multi and self.global_step % config.tunnel_multi == 0 and self.extra_modules['tunnel'] is not None:
+                tunnel_multi = config.tunnel_multi if self.epoch > 5 else (config.tunnel_multi // 20) # make it more well thought
+                if config.tunnel_multi and self.global_step % tunnel_multi == 0 and self.extra_modules['tunnel'] is not None:
                     froze_model(self.model, False)
                     self.extra_modules['hooks_reprs'].enable()
                     self.timer.start('tunnel')
-                    self.extra_modules['tunnel'](self.global_step, loader_size * 40)
-                    self.timer.stop()
+                    self.extra_modules['tunnel'](self.global_step, scope='periodic', phase='train')
+                    self.timer.stop('tunnel')
                     self.extra_modules['hooks_reprs'].disable()
                     froze_model(self.model, True)
                     
@@ -231,7 +236,7 @@ class TrainerClassification:
                 #     reprs = self.extra_modules['hooks_acts'].callback.activations
                 #     self.timer.start('probes')
                 #     evaluators = self.extra_modules['probes'](reprs, y_true, evaluators)
-                #     self.timer.stop()
+                #     self.timer.stop('probes')
                 #     froze_model(self.model, True)
                 
                 # stiffness
@@ -245,13 +250,13 @@ class TrainerClassification:
                 #     if self.global_step % (config.grad_accum_steps * config.acts_rank_multi) == 0 and self.extra_modules['hooks_acts'] is not None :
                 #         self.timer.start('hooks_acts')
                 #         self.extra_modules['hooks_acts'].write_to_tensorboard(self.global_step)
-                #         self.timer.stop()
+                #         self.timer.stop('hooks_acts')
                 #     self.extra_modules['hooks_acts'].reset()
                 # gather dead relu ratio per layer
                 # if self.extra_modules['hooks_dead_relu'] is not None:
                 #     self.timer.start('hooks_dead_relu')
                 #     self.extra_modules['hooks_dead_relu'].write_to_tensorboard(self.global_step)
-                #     self.timer.stop()
+                #     self.timer.stop('hooks_dead_relu')
             
             
             # ════════════════════════ logging ════════════════════════ #

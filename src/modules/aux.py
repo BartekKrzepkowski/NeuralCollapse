@@ -16,18 +16,18 @@ class TimerCPU:
     def __init__(self):
         self.logger = None
         self.times = {}
+        self.start_time = {}
         
     def set_logger(self, logger):
         self.logger = logger
 
     def start(self, name):
-        self.start_time = time.time()
-        self.name = name
+        self.start_time[name] = time.time()
         
-    def stop(self):
-        self.end_time = time.time()
-        self.durraton = self.end_time - self.start_time
-        self.times[f'time/cpu_{self.name}'] = self.durraton
+    def stop(self, name):
+        end_time = time.time()
+        durraton = end_time - self.start_time[name]
+        self.times[f'time/cpu_{name}'] = durraton
         
     def log(self, global_step):
         self.times[f'time/cpu'] = global_step

@@ -3,11 +3,15 @@ from torch.utils.data import DataLoader
 from src.utils.common import DATASET_NAME_MAP, LOSS_NAME_MAP, MODEL_NAME_MAP, OPTIMIZER_NAME_MAP, SCHEDULER_NAME_MAP
 from src.utils.utils_model import init_with_kaiming_normal_fan_in
 from src.utils.utils_optim import configure_optimizer
+from src.utils.utils_trainer import load_model
 
 
-def prepare_model(model_name, model_params):
+def prepare_model(model_name, model_params, checkpoint_path=None, init=None):
     model = MODEL_NAME_MAP[model_name](**model_params)
-    # model.apply(init_with_kaiming_normal_fan_in)
+    if checkpoint_path is not None:
+        model = load_model(model, checkpoint_path)
+    elif init == 'kaiming':
+        model.apply(init_with_kaiming_normal_fan_in)
     return model
 
 
