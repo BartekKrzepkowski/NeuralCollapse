@@ -1,10 +1,10 @@
 from src.modules.callbacks import CALLBACK_TYPE
 
 class Hooks:
-    def __init__(self, model, logger, callback_type):
+    def __init__(self, model, logger, callback_type, kwargs_callback={}):
         self.model = model
         self.logger = logger
-        self.callback = CALLBACK_TYPE[callback_type]()
+        self.callback = CALLBACK_TYPE[callback_type](**kwargs_callback)
         self.hooks = []
         
     def register_hooks(self, modules_list):
@@ -30,3 +30,6 @@ class Hooks:
         
     def enable(self):
         self.callback.enable()
+        
+    def get_assets(self):
+        return self.callback.get_assets()
