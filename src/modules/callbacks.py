@@ -46,43 +46,42 @@ class DeadActivationCallback:
         return self.dead_acts
         
         
-class GatherRepresentationsAndRanksCallback:
+class GatherRepresentationsCallback:
     '''
-    Gather layer representations and calculate their ranks.
+    Gather layers' representations.
     '''
-    def __init__(self):
-        self.activations = []
-        self.ranks = {}
+    def __init__(self, cutoff):
+        self.representations = {}
         self.idx = 0
         self.is_able = False
         self.subsampling = defaultdict(lambda: None)
+        self.cutoff = cutoff
+        self.device = None
 
     def __call__(self, module, input, output):
         if self.is_able:
+            if self.device is None: self.device = output.device
             name = module._get_name() + f'_{self.idx}'
             output = output.flatten(start_dim=1)
             
-            if self.subsampling[name] is None:
-                if output.size(1) > 8000:
-                    self.subsampling[name] = torch.randperm(output.size(1))[:8000].sort()[0]
-            self.activations.append((name, output))
+            if name in self.subsampling:
+                output = self.adjust_representation(output, name)
+            elif output.size(1) > self.cutoff:
+                self.subsampling[name] = torch.randperm(output.size(1))[:self.cutoff].sort()[0]
+                output = self.adjust_representation(output, name)
+                
+            self.representations[name] = output
             self.idx += 1
-        
-    def prepare(self):
-        for name, output in self.activations:
-            output = output.data.detach()
-            name_dict = f'ranks/{name}'
             
-            if output.size(1) > 8000:
-                output = output[:, self.subsampling[name]]
-            
-            cov_matrix = torch.cov(output.T)
-            rank = torch.linalg.matrix_rank(cov_matrix)
-            self.ranks[name_dict] = rank
+    def adjust_representation(self, representation, name):
+        representation = torch.index_select(representation, 1, self.subsampling[name].to(self.device))
+        return representation
+    
+    def get_assets(self):
+        return self.representations
         
     def reset(self):
-        self.activations = []
-        self.ranks = {}
+        self.representations = {}
         self.idx = 0
         
     def disable(self):
@@ -90,12 +89,9 @@ class GatherRepresentationsAndRanksCallback:
         
     def enable(self):
         self.is_able = True
-        
-    def get_assets(self):
-        return self.ranks
 
 
 CALLBACK_TYPE = {
     'dead_relu': DeadActivationCallback,
-    'gather_reprs': GatherRepresentationsAndRanksCallback,
+    'gather_reprs': GatherRepresentationsCallback,
     }
