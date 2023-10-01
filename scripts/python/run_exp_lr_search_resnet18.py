@@ -27,7 +27,6 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     NUM_CLASSES = 10
     RANDOM_SEED = 83
-    OVERLAP = 0.0
     
     type_names = {
         'model': 'resnet_tunnel',
@@ -56,18 +55,13 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     model_params = {'model_config': model_config, 'num_classes': NUM_CLASSES, 'dataset_name': type_names['dataset']}
     
     model = prepare_model(type_names['model'], model_params=model_params).to(device)
-    
+
     
     # ════════════════════════ prepare criterion ════════════════════════ #
     
-    FP = 0.0
     criterion_params = {'criterion_name': 'ce'}
     
-    criterion = prepare_criterion(type_names['criterion'], criterion_params=criterion_params)
-    
-    
-    criterion_params['model'] = None
-    
+    criterion = prepare_criterion(type_names['criterion'], criterion_params=criterion_params)    
     
     # ════════════════════════ prepare loaders ════════════════════════ #
     
@@ -169,7 +163,7 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     config.epoch_end_at = epochs
     
     config.log_multi = 1#(T_max // epochs) // 10
-    config.save_multi = int((T_max // epochs) * 40)
+    config.save_multi = 0#int((T_max // epochs) * 40)
     # config.stiff_multi = (T_max // (window + epochs)) // 2
     config.tunnel_multi = int((T_max // epochs) * 10)
     config.fim_trace_multi = (T_max // epochs) // 2
@@ -190,14 +184,18 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     
     if exp == 'just_run':
         trainer.run_exp(config)
+    elif exp == 'blurring':
+        trainer.run_exp_blurred(config)
+    elif exp == 'half':
+        trainer.run_exp_blurred(config)
     else:
         raise ValueError('wrong exp name have been chosen')
 
 
 if __name__ == "__main__":
     lr = float(sys.argv[1])
-    # wd = float(sys.argv[2])
-    # lr_lambda = float(sys.argv[3])
-    wd, lr_lambda = 0.0, 1.0
-    EPOCHS = 240
+    wd = float(sys.argv[2])
+    # wd = 0.0
+    lr_lambda = 0.98
+    EPOCHS = 200
     objective('just_run', EPOCHS, lr, wd, lr_lambda)

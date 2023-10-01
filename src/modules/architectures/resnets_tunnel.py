@@ -221,7 +221,7 @@ def build_resnet(model_config, num_classes, dataset_name):
     modify_resnet = model_config['modify_resnet']
     
     
-    modify_resnet = modify_resnet and (dataset_name == "dual_cifar100" or dataset_name == "dual_cifar10")
+    modify_resnet = modify_resnet and (dataset_name == "cifar100" or dataset_name == "cifar10")
 
     # model = torchvision.models.__dict__[backbone_type](num_classes=num_classes)
     resnet = partial(

@@ -32,7 +32,7 @@ def objective(exp, epochs, lr, wd, lr_lambda):
         'model': 'resnet_tunnel',
         'criterion': 'cls',
         'dataset': 'cifar10',
-        'optim': 'sgd',
+        'optim': 'adam',
         'scheduler': 'multiplicative'
     }
     
@@ -53,25 +53,21 @@ def objective(exp, epochs, lr, wd, lr_lambda):
                     'skips': True,
                     'modify_resnet': True}
     model_params = {'model_config': model_config, 'num_classes': NUM_CLASSES, 'dataset_name': type_names['dataset']}
+    checkpoint_path = '/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/reports/just_run, adam, cifar10, resnet_tunnel_lr_0.001_wd_0.0_lr_lambda_1.0, lr_search_half/2023-10-01_05-59-46/checkpoints/model_step_epoch_200.pth'
     
-    model = prepare_model(type_names['model'], model_params=model_params).to(device)
-    
+    model = prepare_model(type_names['model'], model_params=model_params, checkpoint_path=checkpoint_path).to(device)
+
     
     # ════════════════════════ prepare criterion ════════════════════════ #
     
-    FP = 0.0
     criterion_params = {'criterion_name': 'ce'}
     
-    criterion = prepare_criterion(type_names['criterion'], criterion_params=criterion_params)
-    
-    
-    criterion_params['model'] = None
-    
+    criterion = prepare_criterion(type_names['criterion'], criterion_params=criterion_params)    
     
     # ════════════════════════ prepare loaders ════════════════════════ #
     
-    
-    dataset_params = {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True}
+    subset_path = None#'data/cifar10_idxs.npy'
+    dataset_params = {'dataset_path': None, 'whether_aug': False, 'proper_normalization': True, 'subset_path': subset_path}
     loader_params = {'batch_size': 125, 'pin_memory': True, 'num_workers': 8}
     
     loaders = prepare_loaders_clp(type_names['dataset'], dataset_params=dataset_params, loader_params=loader_params)
@@ -92,7 +88,7 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     
     # ════════════════════════ prepare wandb params ════════════════════════ #
     
-    quick_name = 'lr_search'
+    quick_name = 'phase2_half'
     ENTITY_NAME = 'bartekk0'
     PROJECT_NAME = 'NeuralCollapse'
     GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_lr_{LR}_wd_{WD}_lr_lambda_{LR_LAMBDA}'
@@ -168,7 +164,7 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     config.epoch_end_at = epochs
     
     config.log_multi = 1#(T_max // epochs) // 10
-    config.save_multi = int((T_max // epochs) * 40)
+    config.save_multi = 0#int((T_max // epochs) * 40)
     # config.stiff_multi = (T_max // (window + epochs)) // 2
     config.tunnel_multi = int((T_max // epochs) * 10)
     config.fim_trace_multi = (T_max // epochs) // 2
@@ -199,8 +195,8 @@ def objective(exp, epochs, lr, wd, lr_lambda):
 
 if __name__ == "__main__":
     lr = float(sys.argv[1])
-    # wd = float(sys.argv[2])
-    # lr_lambda = float(sys.argv[3])
-    wd, lr_lambda = 0.0, 1.0
-    EPOCHS = 240
+    wd = float(sys.argv[2])
+    # wd = 0.0
+    lr_lambda = 1.0
+    EPOCHS = 200
     objective('just_run', EPOCHS, lr, wd, lr_lambda)

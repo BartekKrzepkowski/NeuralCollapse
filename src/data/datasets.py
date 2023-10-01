@@ -1,4 +1,6 @@
 import os
+import numpy as np
+import torch
 
 from torchvision import datasets, transforms
 from torchvision.transforms import InterpolationMode
@@ -27,7 +29,7 @@ def get_mnist(dataset_path):
     return train_data, train_eval_data, test_data
 
 
-def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True):
+def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True, subset_path=None):
     dataset_path = dataset_path if dataset_path is not None else os.environ['CIFAR10_PATH']
     if proper_normalization:
         mean, std = (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.262)
@@ -39,7 +41,13 @@ def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True):
         transforms.Normalize(mean, std),
         transforms.RandomErasing(p=0.1),
     ])
-    train_dataset = datasets.CIFAR10(dataset_path, train=True, download=True, transform=TRANSFORMS_NAME_MAP['transform_proper_train'])
+    
+    transform_train = TRANSFORMS_NAME_MAP['transform_proper_train'] if whether_aug else TRANSFORMS_NAME_MAP['transform_proper_eval']
+    train_dataset = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_train)
+    if subset_path is not None:
+        selected_indices = torch.tensor(np.load(subset_path))
+        train_dataset = torch.utils.data.Subset(train_dataset, selected_indices)
+    print("train size:", len(train_dataset))
     test_proper_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=TRANSFORMS_NAME_MAP['transform_proper_eval'])
     test_blurred_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=TRANSFORMS_NAME_MAP['transform_blurred_eval'])
     return train_dataset, test_proper_dataset, test_blurred_dataset
