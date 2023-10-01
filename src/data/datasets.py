@@ -3,7 +3,16 @@ import os
 from torchvision import datasets, transforms
 from torchvision.transforms import InterpolationMode
 
+from src.data.transforms import TRANSFORMS_NAME_MAP
+
 DOWNLOAD = False
+
+
+def get_dummy(num_classes=10, size=5, image_size=(3, 3, 3)):
+    train_data = datasets.FakeData(size=size, image_size=image_size, num_classes=num_classes, transform=transforms.ToTensor())
+    train_eval_data = datasets.FakeData(size=size, image_size=image_size, num_classes=num_classes, transform=transforms.ToTensor())
+    test_data = datasets.FakeData(size=size, image_size=image_size, num_classes=num_classes, transform=transforms.ToTensor())
+    return train_data, train_eval_data, test_data
 
 
 def get_mnist(dataset_path):
@@ -24,32 +33,15 @@ def get_cifar10(dataset_path=None, whether_aug=True, proper_normalization=True):
         mean, std = (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.262)
     else:
         mean, std = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
-    transform_eval = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean, std),
-    ])
-    transform_blurred = transforms.Compose([
-        transforms.ToTensor(), 
-        transforms.Resize(8, interpolation=InterpolationMode.BILINEAR, antialias=None), 
-        transforms.Resize(32, interpolation=InterpolationMode.BILINEAR, antialias=None),
-        transforms.Normalize(mean, std)
-    ])
     transform_train = transforms.Compose([
         transforms.TrivialAugmentWide(),
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
         transforms.RandomErasing(p=0.1),
     ])
-    transform_train_2 = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.RandomAffine(degrees=0, translate=(1/8, 1/8)),
-        transforms.RandomHorizontalFlip(),
-        transforms.Normalize(mean, std),
-    ])
-    transform_train = transform_train_2 if whether_aug else transform_eval
-    train_dataset = datasets.CIFAR10(dataset_path, train=True, download=True, transform=transform_train)
-    test_proper_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_eval)
-    test_blurred_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=transform_blurred)
+    train_dataset = datasets.CIFAR10(dataset_path, train=True, download=True, transform=TRANSFORMS_NAME_MAP['transform_proper_train'])
+    test_proper_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=TRANSFORMS_NAME_MAP['transform_proper_eval'])
+    test_blurred_dataset = datasets.CIFAR10(dataset_path, train=False, download=True, transform=TRANSFORMS_NAME_MAP['transform_blurred_eval'])
     return train_dataset, test_proper_dataset, test_blurred_dataset
 
 

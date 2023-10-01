@@ -5,6 +5,7 @@ import torch
 from tqdm import tqdm, trange
 
 from src.data.loaders import Loaders
+from src.data.transforms import TRANSFORMS_NAME_MAP
 from src.utils.common import LOGGERS_NAME_MAP
 
 from src.modules.aux import TimerCPU
@@ -35,77 +36,46 @@ class TrainerClassification:
         self.timer = TimerCPU()
         self.device = device
         
-
-    def run_exp1(self, config):
+             
+    def run_exp(self, config):        
+        self.manual_seed(config)
+        self.at_exp_start(config)
+        
+        self.run_loop(config.epoch_start_at, config.epoch_end_at, config)
+        
+        step = f'epoch_{self.epoch + 1}'
+        save_model(self.model, self.save_path(step))
+        self.logger.close()
+        
+    def run_exp_blurred(self, config):        
+        self.manual_seed(config)
+        self.at_exp_start(config)
+        
+        self.loaders['train'].dataset.transform = TRANSFORMS_NAME_MAP['transform_blurred_train']
+        
+        self.run_loop(config.epoch_start_at, config.epoch_end_at, config)
+        
+        step = f'epoch_{self.epoch + 1}'
+        save_model(self.model, self.save_path(step))
+        self.logger.close()
+        
+    def run_exp_half(self, config):        
+        self.manual_seed(config)
+        self.at_exp_start(config)
+        
         batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
         num_workers = config.logger_config['hyperparameters']['loaders']['num_workers']
         dataset_name = config.logger_config['hyperparameters']['type_names']['dataset']
         self.train_loader = Loaders(dataset_name=dataset_name)
+        self.loaders['train'] = self.train_loader.get_half_loader(batch_size, is_train=True, num_workers=num_workers)
+            
+        self.run_loop(config.epoch_start_at, config.epoch_end_at, config)
         
-        self.manual_seed(config)
-        self.at_exp_start(config)
-
-        if config.extra['window'] != 0:
-            print('Entering deficit phase!!!')
-            self.loaders['train'] = self.train_loader.get_blurred_loader(batch_size, is_train=True, num_workers=num_workers)
-            self.run_loop(-config.extra['window'], 0, config)
-            print('Leaving deficit phase!!!')
-
-        self.criterion.fpw = 0.0
-        self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
-        self.run_loop(0, config.epoch_end_at, config)
-
+        step = f'epoch_{self.epoch + 1}'
+        save_model(self.model, self.save_path(step))
         self.logger.close()
-        save_model(self.model, self.save_path(self.global_step))
-        
-    def run_exp1_reverse(self, config):
-        batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
-        num_workers = config.logger_config['hyperparameters']['loaders']['num_workers']
-        dataset_name = config.logger_config['hyperparameters']['type_names']['dataset']
-        self.train_loader = Loaders(dataset_name=dataset_name)
-        
-        self.manual_seed(config)
-        self.at_exp_start(config)
-
-        if config.extra['window'] != 0:
-            print('Entering deficit phase!!!')
-            self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
-            self.run_loop(-config.extra['window'], 0, config)
-            print('Leaving deficit phase!!!')
-
-        self.criterion.fpw = 0.0
-        self.loaders['train'] = self.train_loader.get_blurred_loader(batch_size, is_train=True, num_workers=num_workers)
-        self.run_loop(0, config.epoch_end_at, config)
-
-        self.logger.close()
-        save_model(self.model, self.save_path(self.global_step))
 
 
-    def run_exp2(self, config):
-        batch_size = config.logger_config['hyperparameters']['loaders']['batch_size']
-        num_workers = config.logger_config['hyperparameters']['loaders']['num_workers']
-        dataset_name = config.logger_config['hyperparameters']['type_names']['dataset']
-        self.train_loader = Loaders(dataset_name=dataset_name)
-
-        self.manual_seed(config)
-        self.at_exp_start(config)
-
-        if config.extra['window'] != 0:
-            fpw = self.criterion.fpw
-            self.criterion.fpw = 0.0
-            self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
-            self.run_loop(0, config.extra['window'], config)
-            self.criterion.fpw = fpw
-
-        self.loaders['train'] = self.train_loader.get_blurred_loader(batch_size, is_train=True, num_workers=num_workers)
-        self.run_loop(config.extra['window'], config.extra['window'] + 40, config)
-        self.criterion.fpw = 0.0
-        self.loaders['train'] = self.train_loader.get_proper_loader(batch_size, is_train=True, num_workers=num_workers)
-        self.run_loop(config.extra['window'] + 40, config.extra['window'] + 40 + config.epoch_end_at, config)
-
-        self.logger.close()
-        save_model(self.model, self.save_path(self.global_step))
-    
     def run_loop(self, epoch_start_at, epoch_end_at, config):
         """
         Main method of trainer.
@@ -134,6 +104,7 @@ class TrainerClassification:
                 
             self.timer.log(epoch)
 
+
     def at_exp_start(self, config):
         """
         Initialization of experiment.
@@ -155,7 +126,7 @@ class TrainerClassification:
             self.extra_modules['tunnel'].logger = self.logger
         if 'trace_fim' in self.extra_modules:
             self.extra_modules['trace_fim'].logger = self.logger
-        
+
 
     def run_epoch(self, phase, config):
         """
@@ -167,20 +138,16 @@ class TrainerClassification:
         running_assets = {
             'evaluators': defaultdict(float),
             'denom': 0.0,
-            'traces': defaultdict(float)
         }
         epoch_assets = {
             'evaluators': defaultdict(float),
             'denom': 0.0,
-            'traces': defaultdict(float)
         }
         loader_size = len(self.loaders[phase])
         progress_bar = tqdm(self.loaders[phase], desc=f'run_epoch: {phase}',
                             leave=False, position=1, total=loader_size, colour='red', disable=config.whether_disable_tqdm)
         self.global_step = self.epoch * loader_size
-        for i, data in enumerate(progress_bar):
-            # self.extra_modules['run_stats'].update_checkpoint(global_step=self.global_step)# można kopiować model jedynie przed utworzeniem grafu
-            
+        for i, data in enumerate(progress_bar):          
             x_true, y_true = data
             x_true, y_true = x_true.to(self.device), y_true.to(self.device)
             
@@ -189,13 +156,12 @@ class TrainerClassification:
             self.timer.stop('forward')
             
             self.timer.start('criterion')
-            loss, evaluators, traces = self.criterion(y_pred, y_true)
+            loss, evaluators = self.criterion(y_pred, y_true)
             self.timer.stop('criterion')
             
             step_assets = {
                 'evaluators': evaluators,
                 'denom': y_true.size(0),
-                'traces': traces
             }
             
             if 'train' == phase:
@@ -205,17 +171,20 @@ class TrainerClassification:
                     step_assets['evaluators']['run_stats/model_gradient_norm_squared_from_pytorch'] = norm.item() ** 2
                 
                 self.optim.step()
-                if self.lr_scheduler is not None:
-                    self.lr_scheduler.step()
+                
+                if self.extra_modules['run_stats'] is not None:
+                    self.timer.start('run_stats')
+                    step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
+                    self.timer.stop('run_stats')
                     
-                # if self.extra_modules['run_stats'] is not None:
-                #     self.timer.start('run_stats')
-                #     step_assets['evaluators'] = self.extra_modules['run_stats'](step_assets['evaluators'], 'l2')
-                #     self.timer.stop('run_stats')
+                if self.lr_scheduler is not None and (((self.global_step + 1) % loader_size == 0) or config.logger_config['hyperparameters']['type_names']['scheduler'] != 'multiplicative'):
+                    self.lr_scheduler.step()
+                    step_assets['evaluators']['lr/training'] = self.optim.param_groups[0]['lr']
+                    step_assets['evaluators']['steps/lr'] = self.global_step
                     
                 self.optim.zero_grad(set_to_none=True)
                 
-                if config.fim_trace_multi and self.global_step % config.fim_trace_multi == 0 and self.extra_modules['trace_fim'] is not None:
+                if self.extra_modules['trace_fim'] is not None and config.fim_trace_multi and self.global_step % config.fim_trace_multi == 0:
                     self.timer.start('trace_fim')
                     self.extra_modules['trace_fim'](self.global_step)
                     self.timer.stop('trace_fim')
@@ -266,12 +235,13 @@ class TrainerClassification:
             
             running_assets = self.update_assets(running_assets, step_assets, step_assets['denom'], 'running', phase)
 
-            whether_save_model = config.save_multi and (i + 1) % config.save_multi == 0
+            whether_save_model = config.save_multi and self.global_step % config.save_multi == 0
             whether_log = (i + 1) % config.log_multi == 0
             whether_epoch_end = (i + 1) == loader_size
 
             if whether_save_model and 'train' in phase:
-                save_model(self.model, self.save_path(self.global_step))
+                step = f'epoch_{self.epoch}_global_step_{self.global_step}'
+                save_model(self.model, self.save_path(step))
 
             if whether_log or whether_epoch_end:
                 epoch_assets = self.update_assets(epoch_assets, running_assets, 1.0, 'epoch', phase)
@@ -280,12 +250,12 @@ class TrainerClassification:
                 self.log(running_assets, phase, 'running', progress_bar, self.global_step)
                 running_assets['evaluators'] = defaultdict(float)
                 running_assets['denom'] = 0.0
-                running_assets['traces'] = defaultdict(float)
 
             if whether_epoch_end:
                 self.log(epoch_assets, phase, 'epoch', progress_bar, self.epoch)
 
             self.global_step += 1
+
 
     def log(self, assets: Dict, phase: str, scope: str, progress_bar: tqdm, step: int):
         '''
@@ -301,11 +271,9 @@ class TrainerClassification:
         self.logger.log_scalars(evaluators_log, step)
         progress_bar.set_postfix(evaluators_log)
 
-        traces_log = adjust_evaluators_pre_log(assets['traces'], assets['denom'], round_at=4)
-        self.logger.log_scalars(traces_log, global_step=step)
-
         if self.lr_scheduler is not None and phase == 'train' and scope == 'running':
             self.logger.log_scalars({f'lr_scheduler': self.lr_scheduler.get_last_lr()[0]}, step)
+
 
     def update_assets(self, assets_target: Dict, assets_source: Dict, multiplier, scope, phase: str):
         '''
@@ -320,10 +288,8 @@ class TrainerClassification:
         assets_target['evaluators'] = adjust_evaluators(assets_target['evaluators'], assets_source['evaluators'],
                                                         multiplier, scope, phase)
         assets_target['denom'] += assets_source['denom']
-        scope_traces = 'running_trace_per_param/param' if scope == 'running' else scope
-        assets_target['traces'] = adjust_evaluators(assets_target['traces'], assets_source['traces'],
-                                                    multiplier, scope_traces, phase)
         return assets_target
+
 
     def manual_seed(self, config: defaultdict):
         """

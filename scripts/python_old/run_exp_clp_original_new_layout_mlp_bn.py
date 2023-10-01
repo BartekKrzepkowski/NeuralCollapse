@@ -11,10 +11,11 @@ import omegaconf
 from src.utils.prepare import prepare_model, prepare_loaders_clp, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
 from src.utils.utils_visualisation import ee_tensorboard_layout
-from src.trainer.trainer_classification_original_clp import TrainerClassification
+from trainer.trainer_classification_phases import TrainerClassification
 
 from src.modules.hooks import Hooks
 from src.modules.metrics import RunStats, Stiffness, LinearProbing
+from src.modules.aux_modules import TunnelandProbing, TraceFIM
 
 
 def objective(exp, window, epochs):
@@ -27,7 +28,7 @@ def objective(exp, window, epochs):
     RANDOM_SEED = 83
     
     type_names = {
-        'model': 'simple_cnn',
+        'model': 'mlp_with_norm',
         'criterion': 'fp',
         'dataset': 'cifar10',
         'optim': 'sgd',
@@ -44,11 +45,9 @@ def objective(exp, window, epochs):
     # ════════════════════════ prepare model ════════════════════════ #
     
     
-    N = 1
-    NUM_FEATURES = 3
-    DIMS = [NUM_FEATURES, 32] + [64] * N + [128, NUM_CLASSES]
-    CONV_PARAMS = {'img_height': 32, 'img_widht': 32, 'kernels': [3, 3] * (N + 1), 'strides': [1, 1] * (N + 1), 'paddings': [1, 1] * (N + 1), 'whether_pooling': [False, True] * (N + 1)}
-    model_params = {'layers_dim': DIMS, 'activation_name': 'relu', 'conv_params': CONV_PARAMS}
+    # NUM_FEATURES = 3
+    layers_dim = [3072, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, NUM_CLASSES]
+    model_params = {'layers_dim': layers_dim, 'activation_name': 'relu'}
     
     model = prepare_model(type_names['model'], model_params=model_params).to(device)
     
@@ -69,7 +68,7 @@ def objective(exp, window, epochs):
     
     
     dataset_params = {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True}
-    loader_params = {'batch_size': 125, 'pin_memory': True, 'num_workers': 8}
+    loader_params = {'batch_size': 250, 'pin_memory': True, 'num_workers': 8}
     
     loaders = prepare_loaders_clp(type_names['dataset'], dataset_params=dataset_params, loader_params=loader_params)
     
@@ -116,8 +115,8 @@ def objective(exp, window, epochs):
     
     # DODAJ - POPRAWNE DANE
     print(sum(dict((p.data_ptr(), p.numel()) for p in model.parameters() if p.requires_grad).values()))
-    # x_data_proper = torch.load(f'data/{type_names["dataset"]}_held_out_proper_x.pt').to(device)
-    # y_data_proper = torch.load(f'data/{type_names["dataset"]}_held_out_proper_y.pt').to(device)
+    x_held_out = torch.load(f'data/{type_names["dataset"]}_held_out_proper_x.pt').to(device)
+    y_held_out = torch.load(f'data/{type_names["dataset"]}_held_out_proper_y.pt').to(device)
     
     # x_data_blurred = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_x.pt').to(device)
     # y_data_blurred = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_y.pt').to(device) 
@@ -129,26 +128,33 @@ def objective(exp, window, epochs):
     
     extra_modules = defaultdict(lambda: None)
     
-    extra_modules['hooks_dead_relu'] = Hooks(model, logger=None, callback_type='dead_relu')
-    extra_modules['hooks_dead_relu'].register_hooks([torch.nn.ReLU])
-    extra_modules['hooks_acts'] = Hooks(model, logger=None, callback_type='gather_activations')
-    extra_modules['hooks_acts'].register_hooks([torch.nn.Conv2d, torch.nn.Linear])
+    # extra_modules['hooks_dead_relu'] = Hooks(model, logger=None, callback_type='dead_relu')
+    # extra_modules['hooks_dead_relu'].register_hooks([torch.nn.ReLU])
+    extra_modules['hooks_reprs'] = Hooks(model, logger=None, callback_type='gather_reprs')
+    extra_modules['hooks_reprs'].register_hooks([torch.nn.Conv2d, torch.nn.Linear])
     
+    # extra_modules['hooks_reprs'].enable()
+    # _ = model(torch.randn(2, 3072).to(device))
+    # reprs = extra_modules['hooks_reprs'].callback.activations
+    # extra_modules['hooks_reprs'].reset()
+    # extra_modules['hooks_reprs'].disable()
     
-    _ = model(torch.randn(2, NUM_FEATURES, 32, 32).to(device))
-    reprs = extra_modules['hooks_acts'].callback.activations
-    extra_modules['hooks_acts'].reset()
-    
-    input_dims = [rep[1].size(-1) for rep in reprs]
-    output_dims = len(input_dims) * [NUM_CLASSES]
+    # input_dims = [rep[1].size(-1) for rep in reprs]
+    # output_dims = len(input_dims) * [NUM_CLASSES]
     optim_params = {'lr': LR, 'momentum': MOMENTUM, 'weight_decay': WD}
-    extra_modules['probes'] = LinearProbing(model, criterion, input_dims, output_dims, optim_type=type_names['optim'], optim_params=optim_params)
+    # extra_modules['probes'] = LinearProbing(model, criterion, input_dims, output_dims, optim_type=type_names['optim'], optim_params=optim_params)
     
     
-    extra_modules['run_stats'] = RunStats(model, optim)
+    # extra_modules['run_stats'] = RunStats(model, optim)
     
     held_out_data_plus_extra['num_classes'] = NUM_CLASSES
     # extra_modules['stiffness'] = Stiffness(model, **held_out_data_plus_extra)
+    
+    
+    extra_modules['tunnel'] = TunnelandProbing(loaders, model, num_classes=NUM_CLASSES, optim_type=type_names['optim'], optim_params=optim_params,
+                                               reprs_hook=extra_modules['hooks_reprs'], epochs_probing=20)
+    
+    extra_modules['trace_fim'] = TraceFIM(x_held_out, model, criterion, num_classes=NUM_CLASSES)
     
     
     # ════════════════════════ prepare trainer ════════════════════════ #
@@ -192,8 +198,10 @@ def objective(exp, window, epochs):
     config.grad_accum_steps = GRAD_ACCUM_STEPS
     config.log_multi = 1#(T_max // epochs) // 10
     config.save_multi = 0#T_max // 10
-    config.stiff_multi = (T_max // (window + epochs)) // 2
-    config.acts_rank_multi = (T_max // (window + epochs)) // 2
+    # config.stiff_multi = (T_max // (window + epochs)) // 2
+    # config.acts_rank_multi = (T_max // (window + epochs)) // 2
+    config.tunnel_multi = (T_max // (window + epochs)) * 5
+    config.fim_trace_multi = (T_max // (window + epochs)) // 4
     
     config.clip_value = CLIP_VALUE
     config.random_seed = RANDOM_SEED

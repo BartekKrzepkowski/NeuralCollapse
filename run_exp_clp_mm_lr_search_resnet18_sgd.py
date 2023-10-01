@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+import os
+import sys
 from collections import defaultdict
 
 import numpy as np
 import torch
+from math import ceil
+
 import omegaconf
 
 # from rich.traceback import install
@@ -11,28 +15,26 @@ import omegaconf
 from src.utils.prepare import prepare_model, prepare_loaders_clp, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
 from src.utils.utils_visualisation import ee_tensorboard_layout
-from src.trainer.trainer_classification_original_clp import TrainerClassification
-
-from src.modules.hooks import Hooks
-from src.modules.metrics import RunStats, Stiffness, LinearProbing
+from src.trainer.trainer_classification_phases import TrainerClassification
 from src.modules.aux_modules import TunnelandProbing, TraceFIM
+from src.modules.metrics import RunStats
 
 
-def objective(exp, window, epochs):
+def objective(exp, epochs, lr, wd, lr_lambda):
     # ════════════════════════ prepare general params ════════════════════════ #
 
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    GRAD_ACCUM_STEPS = 1
     NUM_CLASSES = 10
     RANDOM_SEED = 83
+    OVERLAP = 0.0
     
     type_names = {
-        'model': 'mlp_with_norm',
-        'criterion': 'fp',
+        'model': 'resnet_tunnel',
+        'criterion': 'cls',
         'dataset': 'cifar10',
         'optim': 'sgd',
-        'scheduler': None
+        'scheduler': 'multiplicative'
     }
     
     
@@ -45,21 +47,24 @@ def objective(exp, window, epochs):
     # ════════════════════════ prepare model ════════════════════════ #
     
     
-    # NUM_FEATURES = 3
-    layers_dim = [3072, 1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024, NUM_CLASSES]
-    model_params = {'layers_dim': layers_dim, 'activation_name': 'relu'}
+    model_config = {'backbone_type': 'resnet18',
+                    'only_features': False,
+                    'batchnorm_layers': True,
+                    'width_scale': 1.0,
+                    'skips': True,
+                    'modify_resnet': True}
+    model_params = {'model_config': model_config, 'num_classes': NUM_CLASSES, 'dataset_name': type_names['dataset']}
     
     model = prepare_model(type_names['model'], model_params=model_params).to(device)
     
     
     # ════════════════════════ prepare criterion ════════════════════════ #
     
+    FP = 0.0
+    criterion_params = {'criterion_name': 'ce'}
     
-    FP = 0.0#1e-2
-    criterion_params = {'model': model, 'general_criterion_name': 'ce', 'num_classes': NUM_CLASSES,
-                      'whether_record_trace': False, 'fpw': FP}
+    criterion = prepare_criterion(type_names['criterion'], criterion_params=criterion_params)
     
-    criterion = prepare_criterion(type_names['criterion'], criterion_params=criterion_params).to(device)
     
     criterion_params['model'] = None
     
@@ -68,7 +73,7 @@ def objective(exp, window, epochs):
     
     
     dataset_params = {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True}
-    loader_params = {'batch_size': 250, 'pin_memory': True, 'num_workers': 8}
+    loader_params = {'batch_size': 125, 'pin_memory': True, 'num_workers': 8}
     
     loaders = prepare_loaders_clp(type_names['dataset'], dataset_params=dataset_params, loader_params=loader_params)
     
@@ -76,28 +81,23 @@ def objective(exp, window, epochs):
     # ════════════════════════ prepare optimizer & scheduler ════════════════════════ #
     
     
-    LR = 2e-1
-    MOMENTUM = 0.0
-    WD = 0.0
-    T_max = (len(loaders['train']) // GRAD_ACCUM_STEPS) * (window + epochs)
-    
-    
-    print((T_max // (window + epochs)) // 2, len(loaders['train']))
-    # print(T_max//window, T_max-3*T_max//window, 3*T_max//window)
-    # h_params_overall['scheduler'] = {'eta_max':LR, 'eta_medium':1e-2, 'eta_min':1e-6, 'warmup_iters2': 3*T_max//window, 'inter_warmups_iters': T_max-3*T_max//window, 'warmup_iters1': 3*T_max//window, 'milestones':[], 'gamma':1e-1}
-    optim_params = {'lr': LR, 'momentum': MOMENTUM, 'weight_decay': WD}
-    scheduler_params = None
+    LR = lr
+    WD = wd
+    LR_LAMBDA = lr_lambda
+    T_max = len(loaders['train']) * epochs
+    optim_params = {'lr': LR, 'weight_decay': WD}
+    scheduler_params = {'lr_lambda': lambda epoch: LR_LAMBDA}
     
     optim, lr_scheduler = prepare_optim_and_scheduler(model, optim_name=type_names['optim'], optim_params=optim_params, scheduler_name=type_names['scheduler'], scheduler_params=scheduler_params)
-    
+    scheduler_params['lr_lambda'] = LR_LAMBDA # problem with omegacong with primitive type
     
     # ════════════════════════ prepare wandb params ════════════════════════ #
     
-    
-    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_fp_{FP}_lr_{LR}_wd_{WD}'
-    EXP_NAME = f'{GROUP_NAME}_window_{window} , original_clp'
-    PROJECT_NAME = 'Critical_Periods_tunnel'
-    ENTITY_NAME = 'ideas_cv'
+    quick_name = 'lr_search'
+    ENTITY_NAME = 'bartekk0'
+    PROJECT_NAME = 'NeuralCollapse'
+    GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_lr_{LR}_wd_{WD}_lr_lambda_{LR_LAMBDA}'
+    EXP_NAME = f'{GROUP_NAME}, {quick_name}'
 
     h_params_overall = {
         'model': model_params,
@@ -114,47 +114,22 @@ def objective(exp, window, epochs):
     
     
     # DODAJ - POPRAWNE DANE
-    print(sum(dict((p.data_ptr(), p.numel()) for p in model.parameters() if p.requires_grad).values()))
-    x_held_out = torch.load(f'data/{type_names["dataset"]}_held_out_proper_x.pt').to(device)
-    y_held_out = torch.load(f'data/{type_names["dataset"]}_held_out_proper_y.pt').to(device)
+    print('liczba parametrów', sum(dict((p.data_ptr(), p.numel()) for p in model.parameters() if p.requires_grad).values()))
+    held_out = {}
+    # held_out['proper_x_left'] = torch.load(f'data/{type_names["dataset"]}_held_out_proper_x_left.pt').to(device)
+    # held_out['proper_x_right'] = torch.load(f'data/{type_names["dataset"]}_held_out_proper_x_right.pt').to(device)
+    # held_out['blurred_x_right'] = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_x_right.pt').to(device)
     
-    # x_data_blurred = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_x.pt').to(device)
-    # y_data_blurred = torch.load(f'data/{type_names["dataset"]}_held_out_blurred_y.pt').to(device) 
-    
-    held_out_data_plus_extra = {}
     
     # ════════════════════════ prepare extra modules ════════════════════════ #
     
     
     extra_modules = defaultdict(lambda: None)
+    extra_modules['run_stats'] = RunStats(model, optim)
     
-    # extra_modules['hooks_dead_relu'] = Hooks(model, logger=None, callback_type='dead_relu')
-    # extra_modules['hooks_dead_relu'].register_hooks([torch.nn.ReLU])
-    extra_modules['hooks_reprs'] = Hooks(model, logger=None, callback_type='gather_reprs')
-    extra_modules['hooks_reprs'].register_hooks([torch.nn.Conv2d, torch.nn.Linear])
-    
-    # extra_modules['hooks_reprs'].enable()
-    # _ = model(torch.randn(2, 3072).to(device))
-    # reprs = extra_modules['hooks_reprs'].callback.activations
-    # extra_modules['hooks_reprs'].reset()
-    # extra_modules['hooks_reprs'].disable()
-    
-    # input_dims = [rep[1].size(-1) for rep in reprs]
-    # output_dims = len(input_dims) * [NUM_CLASSES]
-    optim_params = {'lr': LR, 'momentum': MOMENTUM, 'weight_decay': WD}
-    # extra_modules['probes'] = LinearProbing(model, criterion, input_dims, output_dims, optim_type=type_names['optim'], optim_params=optim_params)
-    
-    
-    # extra_modules['run_stats'] = RunStats(model, optim)
-    
-    held_out_data_plus_extra['num_classes'] = NUM_CLASSES
-    # extra_modules['stiffness'] = Stiffness(model, **held_out_data_plus_extra)
-    
-    
-    extra_modules['tunnel'] = TunnelandProbing(loaders, model, num_classes=NUM_CLASSES, optim_type=type_names['optim'], optim_params=optim_params,
-                                               reprs_hook=extra_modules['hooks_reprs'], epochs_probing=20)
-    
-    extra_modules['trace_fim'] = TraceFIM(x_held_out, model, criterion, num_classes=NUM_CLASSES)
+    # extra_modules['tunnel'] = TunnelandProbing(loaders, model, num_classes=NUM_CLASSES, optim_type=type_names['optim'], optim_params=optim_params,
+    #                                            reprs_hook=extra_modules['hooks_reprs'], epochs_probing=20)
+    # extra_modules['trace_fim'] = TraceFIM(held_out, model, num_classes=NUM_CLASSES)
     
     
     # ════════════════════════ prepare trainer ════════════════════════ #
@@ -168,7 +143,6 @@ def objective(exp, window, epochs):
         'lr_scheduler': lr_scheduler,
         'device': device,
         'extra_modules': extra_modules,
-        #'held_out_data: '{'x_true1': x_data_proper, 'y_true1': y_data_proper, 'x_true2': x_data_blurred, 'y_true2': y_data_blurred, 'num_classes': NUM_CLASSES},
     }
     
     trainer = TrainerClassification(**params_trainer)
@@ -177,7 +151,7 @@ def objective(exp, window, epochs):
     # ════════════════════════ prepare run ════════════════════════ #
 
 
-    CLIP_VALUE = 100.0
+    CLIP_VALUE = 0.0
     params_names = [n for n, p in model.named_parameters() if p.requires_grad]
     
     logger_config = {'logger_name': 'tensorboard',
@@ -188,20 +162,18 @@ def objective(exp, window, epochs):
                      'layout': ee_tensorboard_layout(params_names), # is it necessary?
                      'mode': 'online',
     }
-    extra = {'window': window}
     
     config = omegaconf.OmegaConf.create()
     
     config.epoch_start_at = 0
     config.epoch_end_at = epochs
     
-    config.grad_accum_steps = GRAD_ACCUM_STEPS
     config.log_multi = 1#(T_max // epochs) // 10
-    config.save_multi = 0#T_max // 10
+    config.save_multi = int((T_max // epochs) * 40)
     # config.stiff_multi = (T_max // (window + epochs)) // 2
-    # config.acts_rank_multi = (T_max // (window + epochs)) // 2
-    config.tunnel_multi = (T_max // (window + epochs)) * 5
-    config.fim_trace_multi = (T_max // (window + epochs)) // 4
+    config.tunnel_multi = int((T_max // epochs) * 10)
+    config.fim_trace_multi = (T_max // epochs) // 2
+    config.run_stats_multi = (T_max // epochs) // 2
     
     config.clip_value = CLIP_VALUE
     config.random_seed = RANDOM_SEED
@@ -209,24 +181,23 @@ def objective(exp, window, epochs):
     
     config.base_path = 'reports'
     config.exp_name = EXP_NAME
-    config.extra = extra
     config.logger_config = logger_config
+    config.checkpoint_path = None
     
     
     # ════════════════════════ run ════════════════════════ #
     
     
-    if exp == 'deficit':
-        trainer.run_exp1(config)
-    elif exp == 'sensitivity':
-        trainer.run_exp2(config)
-    elif exp == 'deficit_reverse':
-        trainer.run_exp1_reverse(config)
+    if exp == 'just_run':
+        trainer.run_exp(config)
     else:
-        raise ValueError('exp should be either "deficit" or "sensitivity"')
+        raise ValueError('wrong exp name have been chosen')
 
 
 if __name__ == "__main__":
-    EPOCHS = 200
-    for window in np.linspace(0, 200, 6):
-        objective('deficit', int(window), EPOCHS)
+    lr = float(sys.argv[1])
+    # wd = float(sys.argv[2])
+    # lr_lambda = float(sys.argv[3])
+    wd, lr_lambda = 0.0, 1.0
+    EPOCHS = 240
+    objective('just_run', EPOCHS, lr, wd, lr_lambda)

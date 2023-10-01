@@ -13,7 +13,7 @@ from functorch import combine_state_for_ensemble
 from torch.func import functional_call, vmap, grad 
 class TunnelandProbing(torch.nn.Module):
     def __init__(self, loaders, model, num_classes, optim_type, optim_params,
-                 reprs_hook, epochs_probing, logger):
+                 reprs_hook, epochs_probing):
         super().__init__()
         self.device = next(model.parameters()).device
         self.model = model
@@ -24,7 +24,7 @@ class TunnelandProbing(torch.nn.Module):
         self.optim_params = optim_params
         self.hooks_reprs = reprs_hook
         self.epochs_probing = epochs_probing
-        self.logger = logger
+        self.logger = None
         
         self.vmap_ranks = vmap(self.calculate_rank, in_dims=(None, 0))
         

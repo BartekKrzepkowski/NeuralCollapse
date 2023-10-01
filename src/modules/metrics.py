@@ -146,63 +146,8 @@ class RunStats(torch.nn.Module):
         evaluators['run_stats/dead_neurons_overall'] = dead_neurons_overall / all_neurons
 
 
-class CosineAlignments:
-    def __init__(self, model, loader, criterion) -> None:
-        self.model = model
-        self.loader = loader
-        self.criterion = criterion
-        self.device = next(model.parameters()).device
-
-    def calc_variance(self, n):
-        gs = torch.tensor(self.gather_gradients(n))
-        gdv = 0.
-        for i in range(n):
-            for j in range(i+1, n):
-                gdv += 1 - torch.dot(gs[i], gs[j]) / torch.norm(gs[i], gs[j])
-        gdv /= 2 / (n * (n - 1))
-        return gdv
 
 
-    def gather_gradients(self, n, device):
-        gs = []
-        for i, (x_true, y_true) in enumerate(self.loader):
-            if i >= n: break
-            x_true, y_true = x_true.to(self.device), y_true.to(self.device)
-            y_pred = self.model(x_true)
-            self.criterion(y_pred, y_true).backward()
-            g = [p.grad for p in self.model.parameters() if p.requires_grad]
-            gs.append(g)
-            self.model.zero_grad()
-        return gs
-    
-def max_eigenvalue(model, loss_fn, data, target):
-    # Set model to evaluation mode
-    model.eval()
-    # Create a variable from the data
-    data = torch.autograd.Variable(data, requires_grad=True)
-    # Compute the loss
-    loss = loss_fn(model(data), target)
-    # Compute the gradients
-    grads = torch.autograd.grad(
-            loss,
-            [p for p in model.parameters() if p.requires_grad],
-            retain_graph=True,
-            create_graph=True)
-    # Get the gradients of the weights
-    grads = torch.cat([g.reshape(-1) for g in grads])
-    # Create a vector of ones with the same size as the gradients
-    v = torch.ones(grads.size()).to(grads.device)
-    # Compute the Hessian-vector product
-    Hv = torch.autograd.grad(grads, model.parameters(), grad_outputs=v, retain_graph=True)
-    # Concatenate the Hessian-vector product into a single vector
-    Hv = torch.cat([h.reshape(-1) for h in Hv])
-    # Compute the maximum eigenvalue using the power iteration method
-    for _ in range(100):
-        v = Hv / torch.norm(Hv)
-        Hv = torch.autograd.grad(grads, model.parameters(), grad_outputs=v, retain_graph=True)
-        Hv = torch.cat([h.reshape(-1) for h in Hv])
-
-    return (v * Hv).sum()
         
 
 import torch
@@ -490,55 +435,5 @@ class Stiffness(torch.nn.Module):
         proper_labels = np.array(proper_labels)
         unsolicited_ratio /= denominator
         return proper_labels, unsolicited_ratio
-    
-    
-    
-class LinearProbing(torch.nn.Module):
-    def __init__(self, model, criterion, input_dims, output_dims, optim_type, optim_params):
-        super().__init__()
-        device = next(model.parameters()).device
-        self.criterion = torch.nn.CrossEntropyLoss().to(device)
-        self.heads = self.prepare_heads(input_dims, output_dims).to(device)
-        self.optim = prepare.prepare_optim_and_scheduler(self.heads, optim_type, optim_params)[0]
-        
-        
-    def forward(self, reprs, y_true, evaluators):
-        accs = []
-        losses = []
-        for i, head in enumerate(self.heads):
-            rep = reprs[i][1] # tutaj kryje się rownież nazwa warstwy
-            rep = torch.relu(rep)
-            output = head(rep)
-            loss = self.criterion(output, y_true)
-            acc = (torch.argmax(output, dim=1) == y_true).float().mean()
-            accs.append(acc)
-            losses.append(loss)
-            
-        acc = sum(accs) / len(accs)
-        loss = sum(losses) / len(losses)
-        accs.append(acc)
-        losses.append(loss)
-        
-        self.prepare_evaluators(evaluators, accs, losses)
-        
-        loss.backward()
-        self.optim.step()
-        self.optim.zero_grad()
-        
-        return evaluators
-    
-    def prepare_heads(self, input_dims, output_dims):
-        heads = []
-        for i in range(len(input_dims)):
-            heads.append(torch.nn.Linear(input_dims[i], output_dims[i]))
-        heads = torch.nn.ModuleList(heads)
-        return heads
-    
-    def prepare_evaluators(self, evaluators, accs, losses):
-        for i in range(len(accs)-1):
-            evaluators[f'linear_probing/accuracy_{i}'] = accs[i].item()
-            evaluators[f'linear_probing/loss_{i}'] = losses[i].item()
-    
-        evaluators[f'linear_probing/accuracy_overall'] = accs[-1].item()
-        evaluators[f'linear_probing/loss_overall'] = losses[-1].item()
+
     

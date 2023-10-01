@@ -11,4 +11,4 @@
 
 eval "$(conda shell.bash hook)"
 conda activate ncollapse
-WANDB__SERVICE_WAIT=300 python3 -m scripts.python.$1 $2 
+WANDB__SERVICE_WAIT=300 python3 -m scripts.python.$1 $2 $3

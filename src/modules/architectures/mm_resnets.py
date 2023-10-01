@@ -76,9 +76,18 @@ class ResNet(nn.Module):
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
         skips: bool = True,
+        wheter_concate: bool = False,
+        eps: float = 1e-5,
+        overlap: float = 0.0,
+        img_height: int = 32,
+        img_width: int = 32,
+        modify_resnet: bool = False,
     ) -> None:
         super().__init__()
+        from math import ceil
         # _log_api_usage_once(self)
+        self.eps = eps
+        self.scaling_factor = 2 if wheter_concate else 1
 
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
@@ -87,7 +96,7 @@ class ResNet(nn.Module):
         self.scale_width = width_scale
         self.skips = skips
 
-        self.inplanes = int(64 * width_scale)
+        
         self.dilation = 1
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
@@ -100,22 +109,38 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        self.conv1 = nn.Conv2d(
-            3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False
-        )
-        self.bn1 = norm_layer(self.inplanes)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(
-            block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]
-        )
-        self.layer3 = self._make_layer(
-            block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1]
-        )
-        self.layer4 = self._make_layer(
-            block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2]
-        )
+        
+        self.inplanes = int(64 * width_scale)
+        self.conv11 = torch.nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=2, bias=False) if modify_resnet else \
+            nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.maxpool1 = torch.nn.Identity() if modify_resnet else nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.conv21 = torch.nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=2, bias=False) if modify_resnet else \
+            nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.maxpool2 = torch.nn.Identity() if modify_resnet else nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        
+        self.net1 = nn.Sequential(self.conv11,
+                                  norm_layer(self.inplanes),
+                                  nn.ReLU(inplace=True),
+                                  self.maxpool1,
+                                  self._make_layer(block, 64, layers[0]),
+                                  self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]))
+        self.inplanes = int(64 * width_scale)
+        self.net2 = nn.Sequential(self.conv21,
+                                  norm_layer(self.inplanes),
+                                  nn.ReLU(inplace=True),
+                                  self.maxpool2,
+                                  self._make_layer(block, 64, layers[0]),
+                                  self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0]))
+        
+        z = torch.randn(1, 3, img_height, ceil(img_width * (overlap / 2 + 0.5)))
+        x1 = self.net1(z)
+        # x2 = self.net2(z)
+        # z = torch.cat((x1, x2), dim=-1)
+        _, self.channels_out, self.height, self.width = x1.shape
+        # pre_mlp_channels = self.channels_out * self.scaling_factor
+        self.net3 = nn.Sequential(self._make_layer(block, 256 * self.scaling_factor, layers[2], stride=2, dilate=replace_stride_with_dilation[1]),
+                                  self._make_layer(block, 512 * self.scaling_factor, layers[3], stride=2, dilate=replace_stride_with_dilation[2]))
+        # x3 = self.net3(x1)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(int(512 * width_scale * block.expansion), num_classes)
 
@@ -207,11 +232,49 @@ class ResNet(nn.Module):
 
         return x
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self._forward_impl(x)
+    def forward(self, x1, x2, left_branch_intervention=None, right_branch_intervention=None, enable_left_branch=True, enable_right_branch=True):
+        assert left_branch_intervention is None or right_branch_intervention is None, "At least one branchnet should be left intact"
+        assert enable_left_branch or enable_right_branch, "At least one branchnet should be enabled"
+        
+        if enable_left_branch:
+            if left_branch_intervention == "occlusion":
+                x1 = torch.randn_like(x1, device=x1.device) * self.eps
+            elif left_branch_intervention == "deactivation":
+                x1 = torch.zeros_like(x1, device=x1.device)
+                
+            x1 = self.net1(x1)
+        else:
+            if left_branch_intervention == "occlusion":
+                x1 = torch.randn((x1.size(0), self.channels_out, self.height, self.width), device=x1.device) * self.eps
+            elif left_branch_intervention == "deactivation":
+                x1 = torch.zeros((x1.size(0), self.channels_out, self.height, self.width), device=x1.device)
+            else:
+                raise ValueError("Invalid left branch intervention")
+        
+        if enable_right_branch:
+            if right_branch_intervention == "occlusion":
+                x2 = torch.randn_like(x2, device=x2.device) * self.eps
+            elif right_branch_intervention == "deactivation":
+                x2 = torch.zeros_like(x2, device=x2.device)
+                
+            x2 = self.net2(x2)
+        else:
+            if right_branch_intervention == "occlusion":
+                x2 = torch.randn((x2.size(0), self.channels_out, self.height, self.width), device=x2.device) * self.eps
+            elif right_branch_intervention == "deactivation":
+                x2 = torch.zeros((x2.size(0), self.channels_out, self.height, self.width), device=x2.device)
+            else:
+                raise ValueError("Invalid right branch intervention")
+            
+        y = torch.cat((x1, x2), dim=-1) if self.scaling_factor == 2 else x1 + x2
+        y = self.net3(y)
+        y = self.avgpool(y)
+        y = torch.flatten(y, 1)
+        y = self.fc(y)
+        return y
 
 
-def build_resnet(model_config, num_classes, dataset_name):
+def build_mm_resnet(model_config, num_classes, dataset_name):
 
     backbone_type = model_config['backbone_type']
     only_features = model_config['only_features']
@@ -219,13 +282,14 @@ def build_resnet(model_config, num_classes, dataset_name):
     width_scale = model_config['width_scale']
     skips = model_config['skips']
     modify_resnet = model_config['modify_resnet']
-    
+    wheter_concate = model_config['wheter_concate']
+    overlap = model_config['overlap']
     
     modify_resnet = modify_resnet and (dataset_name == "dual_cifar100" or dataset_name == "dual_cifar10")
 
     # model = torchvision.models.__dict__[backbone_type](num_classes=num_classes)
     resnet = partial(
-        ResNet, num_classes=num_classes, width_scale=width_scale, skips=skips
+        ResNet, num_classes=num_classes, width_scale=width_scale, skips=skips, overlap=overlap, modify_resnet=modify_resnet, wheter_concate=wheter_concate
     )
     if not batchnorm_layers:
         resnet = partial(resnet, norm_layer=nn.Identity)
@@ -243,11 +307,15 @@ def build_resnet(model_config, num_classes, dataset_name):
         case _:
             raise ValueError(f"Unknown backbone type: {backbone_type}")
 
-    if modify_resnet:
-        model.maxpool = torch.nn.Identity()
-        model.conv1 = torch.nn.Conv2d(
-            3, int(64 * width_scale), kernel_size=3, stride=1, padding=2, bias=False
-        )
+    # if modify_resnet and (dataset_name == "cifar100" or dataset_name == "cifar10"):
+    #     model.maxpool1 = torch.nn.Identity()
+    #     model.conv11 = torch.nn.Conv2d(
+    #         3, int(64 * width_scale), kernel_size=3, stride=1, padding=2, bias=False
+    #     )
+    #     model.maxpool2 = torch.nn.Identity()
+    #     model.conv21 = torch.nn.Conv2d(
+    #         3, int(64 * width_scale), kernel_size=3, stride=1, padding=2, bias=False
+    #     )
     if only_features:
         model.fc = torch.nn.Identity()
 

@@ -1,0 +1,111 @@
+/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.0
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.0
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.0
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.0
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/scipy/__init__.py:146: UserWarning: A NumPy version >=1.17.3 and <1.25.0 is required for this version of SciPy (detected version 1.26.0
+  warnings.warn(f"A NumPy version >={np_minversion} and <{np_maxversion}"
+Traceback (most recent call last):
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 203, in <module>
+    objective('just_run', EPOCHS, lr, wd, lr_lambda)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 58, in objective
+    model = prepare_model(type_names['model'], model_params=model_params).to(device)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1145, in to
+    return self._apply(convert)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 797, in _apply
+    module._apply(fn)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 820, in _apply
+    param_applied = fn(param)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1143, in convert
+    return t.to(device, dtype if t.is_floating_point() or t.is_complex() else None, non_blocking)
+RuntimeError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 203, in <module>
+    objective('just_run', EPOCHS, lr, wd, lr_lambda)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 58, in objective
+    model = prepare_model(type_names['model'], model_params=model_params).to(device)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1145, in to
+    return self._apply(convert)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 797, in _apply
+    module._apply(fn)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 820, in _apply
+    param_applied = fn(param)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1143, in convert
+    return t.to(device, dtype if t.is_floating_point() or t.is_complex() else None, non_blocking)
+RuntimeError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 203, in <module>
+    objective('just_run', EPOCHS, lr, wd, lr_lambda)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 58, in objective
+    model = prepare_model(type_names['model'], model_params=model_params).to(device)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1145, in to
+    return self._apply(convert)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 797, in _apply
+    module._apply(fn)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 820, in _apply
+    param_applied = fn(param)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1143, in convert
+    return t.to(device, dtype if t.is_floating_point() or t.is_complex() else None, non_blocking)
+RuntimeError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+Traceback (most recent call last):
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 203, in <module>
+    objective('just_run', EPOCHS, lr, wd, lr_lambda)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/scripts/python/run_exp_clp_mm_lr_search_resnet18_sgd.py", line 58, in objective
+    model = prepare_model(type_names['model'], model_params=model_params).to(device)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1145, in to
+    return self._apply(convert)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 797, in _apply
+    module._apply(fn)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 820, in _apply
+    param_applied = fn(param)
+  File "/raid/NFS_SHARE/home/b.krzepkowski/miniconda3/envs/ncollapse/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1143, in convert
+    return t.to(device, dtype if t.is_floating_point() or t.is_complex() else None, non_blocking)
+RuntimeError: CUDA error: CUDA-capable device(s) is/are busy or unavailable
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+wandb: Currently logged in as: bartekk (bartekk0). Use `wandb login --relogin` to force relogin
+wandb: Appending key for api.wandb.ai to your netrc file: /raid/NFS_SHARE/home/b.krzepkowski/.netrc
+wandb: Tracking run with wandb version 0.15.11
+wandb: Run data is saved locally in /raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/reports/just_run, sgd, cifar10, resnet_tunnel_lr_0.001_wd_0.0_lr_lambda_1.0, lr_search/2023-09-30_23-36-04/tensorboard/wandb/run-20230930_233605-gp1hncyb
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run just_run, sgd, cifar10, resnet_tunnel_lr_0.001_wd_0.0_lr_lambda_1.0, lr_search
+wandb: ⭐️ View project at https://wandb.ai/bartekk0/NeuralCollapse
+wandb: 🚀 View run at https://wandb.ai/bartekk0/NeuralCollapse/runs/gp1hncyb
+Files already downloaded and verified
+Files already downloaded and verified
+Files already downloaded and verified
+liczba parametrów 11181642
+slurmstepd: error: *** JOB 16027 ON login01 CANCELLED AT 2023-09-30T23:38:50 ***

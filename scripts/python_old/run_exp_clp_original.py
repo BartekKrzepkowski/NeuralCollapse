@@ -8,7 +8,7 @@ import torch
 from src.utils.prepare import prepare_model, prepare_loaders_clp, prepare_criterion, prepare_optim_and_scheduler
 from src.utils.utils_trainer import manual_seed
 from src.utils.utils_visualisation import ee_tensorboard_layout
-from src.trainer.trainer_classification_original_clp import TrainerClassification
+from trainer.trainer_classification_phases import TrainerClassification
 from src.trainer.trainer_context import TrainerContext
 
 

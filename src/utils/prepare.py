@@ -10,8 +10,8 @@ def prepare_model(model_name, model_params, checkpoint_path=None, init=None):
     model = MODEL_NAME_MAP[model_name](**model_params)
     if checkpoint_path is not None:
         model = load_model(model, checkpoint_path)
-    elif init == 'kaiming':
-        model.apply(init_with_kaiming_normal_fan_in)
+    # elif init == 'kaiming':
+    #     model.apply(init_with_kaiming_normal_fan_in)
     return model
 
 

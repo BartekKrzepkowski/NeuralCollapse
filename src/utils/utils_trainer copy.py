@@ -24,12 +24,6 @@ def manual_seed(random_seed, device):
 
 
 def adjust_evaluators(d1, dd2, denom, scope, phase):
-    '''
-    Adoptuje evaluatory z dd2 do d1.
-    Jeżeli klucz kończy się phase (train/valid/test), to sprawdza czy istnieje scope (running/epoch) by upewnić się że doda go właściwie.
-    Jeżeli klucz nie jest podzielony przez "/" to dodaje scope i phase.
-    W przeciwnym przypadku dodaje scope, sprawdzając czy istnieje scope by upewnić się że doda go właściwie.
-    '''
     for evaluator_key in dd2:
         eval_key = str(evaluator_key).split('/')
         if 'train' in evaluator_key or 'valid' in evaluator_key or 'test' in evaluator_key:
@@ -55,6 +49,13 @@ def adjust_evaluators_pre_log(d1, denom, round_at=4):
 def update_tensor(a, b):
     c = torch.cat([a, b])
     return c
+
+
+def find_paths(path):
+    dirs = os.listdir(path)
+    path = os.path.join(path, dirs[-1], 'checkpoints')
+    dirs = sorted([os.path.join(path, dir) for dir in os.listdir(path)])
+    return dirs
 
 
 def load_model(model, path, device=None):

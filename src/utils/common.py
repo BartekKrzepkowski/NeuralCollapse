@@ -1,12 +1,11 @@
 import torch
 
-from src.data.datasets import get_mnist, get_cifar10, get_cifar100, get_tinyimagenet, get_food101
-from src.modules.losses import ClassificationLoss, FisherPenaltyLoss, MSESoftmaxLoss, BADGELoss
-from src.modules.architectures.models import MLP, MLPwithNorm, MLPwithDropout, SimpleCNN, SimpleCNNwithNorm,\
+from src.data.datasets import get_dummy, get_mnist, get_cifar10, get_cifar100, get_tinyimagenet, get_food101
+from src.modules.losses import ClassificationLoss, MSESoftmaxLoss, FisherPenaltyLoss
+from src.modules.architectures.models import Dummy, MLP, MLPwithNorm, MLPwithDropout, SimpleCNN, SimpleCNNwithNorm,\
     SimpleCNNwithDropout, SimpleCNNwithNormandDropout, SimpleCNNwithGroupNorm
 from src.modules.architectures.resnets import ResNet18, ResNet34
 from src.modules.architectures.resnets_tunnel import build_resnet
-from src.utils.utils_optim import MultiStepwithDoubleLinearWarmup
 from src.visualization.clearml_logger import ClearMLLogger
 from src.visualization.tensorboard_pytorch import TensorboardPyTorch
 from src.visualization.wandb_logger import WandbLogger
@@ -20,6 +19,7 @@ ACT_NAME_MAP = {
 }
 
 DATASET_NAME_MAP = {
+    'dummy': get_dummy,
     'mnist': get_mnist,
     'cifar10': get_cifar10,
     'cifar100': get_cifar100,
@@ -40,10 +40,10 @@ LOSS_NAME_MAP = {
     'mse': torch.nn.MSELoss,
     'mse_softmax': MSESoftmaxLoss,
     'fp': FisherPenaltyLoss,
-    'badge': BADGELoss,
 }
 
 MODEL_NAME_MAP = {
+    'dummy': Dummy,
     'mlp': MLP,
     'mlp_with_norm': MLPwithNorm,
     'mlp_with_dropout': MLPwithDropout,
@@ -74,7 +74,7 @@ OPTIMIZER_NAME_MAP = {
 
 SCHEDULER_NAME_MAP = {
     'reduce_on_plateau': torch.optim.lr_scheduler.ReduceLROnPlateau,
+    'multiplicative': torch.optim.lr_scheduler.MultiplicativeLR,
     'cosine': torch.optim.lr_scheduler.CosineAnnealingLR,
-    'cosine_warm_restarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts,
-    'multistep_with_double_linear_warmup': MultiStepwithDoubleLinearWarmup,
+    'cosine_warm_restarts': torch.optim.lr_scheduler.CosineAnnealingWarmRestarts
 }
