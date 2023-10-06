@@ -163,7 +163,7 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     config.epoch_end_at = epochs
     
     config.log_multi = 1#(T_max // epochs) // 10
-    config.save_multi = 0#int((T_max // epochs) * 40)
+    config.save_multi = int((T_max // epochs) * 40)
     # config.stiff_multi = (T_max // (window + epochs)) // 2
     config.tunnel_multi = int((T_max // epochs) * 10)
     config.fim_trace_multi = (T_max // epochs) // 2
@@ -195,7 +195,6 @@ def objective(exp, epochs, lr, wd, lr_lambda):
 if __name__ == "__main__":
     lr = float(sys.argv[1])
     wd = float(sys.argv[2])
-    # wd = 0.0
     lr_lambda = 0.98
     EPOCHS = 200
-    objective('just_run', EPOCHS, lr, wd, lr_lambda)
+    objective('blurring', EPOCHS, lr, wd, lr_lambda)

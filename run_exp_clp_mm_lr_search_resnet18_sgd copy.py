@@ -20,7 +20,7 @@ from src.modules.aux_modules import TunnelandProbing, TraceFIM
 from src.modules.metrics import RunStats
 
 
-def objective(exp, epochs, lr, wd, lr_lambda, epoch):
+def objective(exp, epochs, lr, wd, lr_lambda):
     # ════════════════════════ prepare general params ════════════════════════ #
 
 
@@ -32,7 +32,7 @@ def objective(exp, epochs, lr, wd, lr_lambda, epoch):
         'model': 'resnet_tunnel',
         'criterion': 'cls',
         'dataset': 'cifar10',
-        'optim': 'sgd',
+        'optim': 'adam',
         'scheduler': 'multiplicative'
     }
     
@@ -53,9 +53,8 @@ def objective(exp, epochs, lr, wd, lr_lambda, epoch):
                     'skips': True,
                     'modify_resnet': True}
     model_params = {'model_config': model_config, 'num_classes': NUM_CLASSES, 'dataset_name': type_names['dataset']}
-    checkpoint_path = f'/raid/NFS_SHARE/home/b.krzepkowski/Github/NeuralCollapse/reports/blurring, sgd, cifar10, resnet_tunnel_lr_0.4_wd_0.001_lr_lambda_0.98, lr_search/2023-10-01_09-23-06/checkpoints/model_step_epoch_{epoch}_global_step_{epoch*400}.pth'
     
-    model = prepare_model(type_names['model'], model_params=model_params, checkpoint_path=checkpoint_path).to(device)
+    model = prepare_model(type_names['model'], model_params=model_params).to(device)
 
     
     # ════════════════════════ prepare criterion ════════════════════════ #
@@ -66,8 +65,8 @@ def objective(exp, epochs, lr, wd, lr_lambda, epoch):
     
     # ════════════════════════ prepare loaders ════════════════════════ #
     
-    subset_path = None#'data/cifar10_idxs.npy'
-    dataset_params = {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True, 'subset_path': subset_path}
+    
+    dataset_params = {'dataset_path': None, 'whether_aug': True, 'proper_normalization': True, 'subset_path': 'data/cifar10_idxs.npy'}
     loader_params = {'batch_size': 125, 'pin_memory': True, 'num_workers': 8}
     
     loaders = prepare_loaders_clp(type_names['dataset'], dataset_params=dataset_params, loader_params=loader_params)
@@ -88,7 +87,7 @@ def objective(exp, epochs, lr, wd, lr_lambda, epoch):
     
     # ════════════════════════ prepare wandb params ════════════════════════ #
     
-    quick_name = f'phase2_clp_epoch_{epoch}'
+    quick_name = 'lr_search_half'
     ENTITY_NAME = 'bartekk0'
     PROJECT_NAME = 'NeuralCollapse'
     GROUP_NAME = f'{exp}, {type_names["optim"]}, {type_names["dataset"]}, {type_names["model"]}_lr_{LR}_wd_{WD}_lr_lambda_{LR_LAMBDA}'
@@ -194,10 +193,10 @@ def objective(exp, epochs, lr, wd, lr_lambda, epoch):
 
 
 if __name__ == "__main__":
-    lr = float(sys.argv[1])
-    wd = float(sys.argv[2])
-    epoch = int(sys.argv[3])
-    # wd = 0.0
-    lr_lambda = 0.98
-    EPOCHS = 300
-    objective('just_run', EPOCHS, lr, wd, lr_lambda, epoch)
+    # lr = float(sys.argv[1])
+    lr = 0.1
+    # wd = float(sys.argv[2])
+    wd = 0.0
+    lr_lambda = 1.0
+    EPOCHS = 350
+    objective('just_run', EPOCHS, lr, wd, lr_lambda)
