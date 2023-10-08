@@ -124,6 +124,8 @@ class TrainerClassification:
             self.extra_modules['hooks_acts'].logger = self.logger
         if 'tunnel' in self.extra_modules:
             self.extra_modules['tunnel'].logger = self.logger
+        if 'tunnel_grads' in self.extra_modules:
+            self.extra_modules['tunnel_grads'].logger = self.logger
         if 'trace_fim' in self.extra_modules:
             self.extra_modules['trace_fim'].logger = self.logger
 
@@ -189,7 +191,7 @@ class TrainerClassification:
                     self.extra_modules['trace_fim'](self.global_step)
                     self.timer.stop('trace_fim')
                 
-                tunnel_multi = config.tunnel_multi if self.epoch > 5 else (config.tunnel_multi // 20) # make it more well thought
+                tunnel_multi = config.tunnel_multi if self.epoch > 5 else ((config.tunnel_multi // 20) if self.epoch > 0 else (config.tunnel_multi // 80))# make it more well thought
                 if config.tunnel_multi and self.global_step % tunnel_multi == 0 and self.extra_modules['tunnel'] is not None:
                     froze_model(self.model, False)
                     self.extra_modules['hooks_reprs'].enable()
@@ -198,6 +200,12 @@ class TrainerClassification:
                     self.timer.stop('tunnel')
                     self.extra_modules['hooks_reprs'].disable()
                     froze_model(self.model, True)
+                    
+                tunnel_grads_multi = config.tunnel_grads_multi if self.epoch > 5 else ((config.tunnel_grads_multi // 20) if self.epoch > 0 else (config.tunnel_grads_multi // 80))# make it more well thought
+                if config.tunnel_grads_multi and self.global_step % tunnel_grads_multi == 0 and self.extra_modules['tunnel_grads'] is not None:
+                    self.timer.start('tunnel_grads')
+                    self.extra_modules['tunnel_grads'](self.global_step, scope='periodic', phase='train')
+                    self.timer.stop('tunnel_grads')
                     
                 
                 # if self.extra_modules['hooks_acts'] is not None and self.extra_modules['probes'] is not None:

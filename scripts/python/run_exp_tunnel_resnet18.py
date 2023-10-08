@@ -19,6 +19,7 @@ from src.trainer.trainer_classification_phases import TrainerClassification
 
 from src.modules.hooks import Hooks
 from src.modules.aux_modules import TunnelandProbing, TraceFIM
+from src.modules.aux_modules_collapse import TunnelGrad
 from src.modules.metrics import RunStats
 
 
@@ -128,8 +129,10 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     
     extra_modules['run_stats'] = RunStats(model, optim)
     
-    extra_modules['tunnel'] = TunnelandProbing(loaders, model, num_classes=NUM_CLASSES, optim_type=type_names['optim'], optim_params={'lr': 1e-2, 'weight_decay': 0.0},
-                                               reprs_hook=extra_modules['hooks_reprs'], epochs_probing=20)
+    # extra_modules['tunnel'] = TunnelandProbing(loaders, model, num_classes=NUM_CLASSES, optim_type=type_names['optim'], optim_params={'lr': 1e-2, 'weight_decay': 0.0},
+    #                                            reprs_hook=extra_modules['hooks_reprs'], epochs_probing=20)
+    
+    extra_modules['tunnel_grads'] = TunnelGrad(loaders, model, cutoff=4000)
     # extra_modules['trace_fim'] = TraceFIM(held_out, model, num_classes=NUM_CLASSES)
     
     
@@ -173,6 +176,7 @@ def objective(exp, epochs, lr, wd, lr_lambda):
     config.save_multi = int((T_max // epochs) * 40)
     # config.stiff_multi = (T_max // (window + epochs)) // 2
     config.tunnel_multi = int((T_max // epochs) * 10)
+    config.tunnel_grads_multi = int((T_max // epochs) * 10)
     config.fim_trace_multi = (T_max // epochs) // 2
     config.run_stats_multi = (T_max // epochs) // 2
     

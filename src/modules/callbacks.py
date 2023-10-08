@@ -61,7 +61,7 @@ class GatherRepresentationsCallback:
     def __call__(self, module, input, output):
         if self.is_able:
             if self.device is None: self.device = output.device
-            name = module._get_name() + f'_{self.idx}'
+            name = module._get_name() + f'_{"" if self.idx > 9 else "0"}{self.idx}'
             output = output.flatten(start_dim=1)
             
             if name in self.subsampling:

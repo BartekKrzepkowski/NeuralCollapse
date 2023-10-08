@@ -33,7 +33,7 @@ class TunnelandProbing(torch.nn.Module):
         self.model.eval()
         DATASET_NAME = 'test_proper'
         x_test = torch.cat([x for x, _ in self.loaders[DATASET_NAME]], dim=0).to(self.device)
-        y_test = torch.cat([y for _, y in self.loaders[DATASET_NAME]], dim=0).to(self.device)
+        # y_test = torch.cat([y for _, y in self.loaders[DATASET_NAME]], dim=0).to(self.device)
         with torch.no_grad():
             _ = self.model(x_test)
         internal_representations_test = self.hooks_reprs.get_assets()  # (B, D)
@@ -43,8 +43,8 @@ class TunnelandProbing(torch.nn.Module):
         # calculate ranks
         postfix = f'____{scope}____{phase}'
         named_weights = {n: p.reshape(p.size(0), -1) for n, p in self.model.named_parameters() if 'weight' in n}
-        evaluators = self.prepare_and_calculate_ranks(internal_representations_test.items(), evaluators, prefix=f'ranks_representations_{DATASET_NAME}', postfix=postfix)
-        evaluators = self.prepare_and_calculate_ranks(named_weights.items(), evaluators, prefix=f'ranks_weights_{DATASET_NAME}', postfix=postfix)
+        evaluators = self.prepare_and_calculate_ranks(internal_representations_test, evaluators, prefix=f'ranks_representations', postfix=postfix)
+        evaluators = self.prepare_and_calculate_ranks(named_weights, evaluators, prefix=f'ranks_weights', postfix=postfix)
         
         # # prepare heads
         # input_dims = [representation.size(1) for representation in internal_representations_test]
@@ -76,45 +76,45 @@ class TunnelandProbing(torch.nn.Module):
         self.logger.log_scalars(evaluators, step)
     
     def prepare_and_calculate_ranks(self, matrices, evaluators, prefix, postfix):
-        _, matrices = zip(*matrices)
-        print(matrices.device)
-        matrices = matrices.to(self.device)
+        # _, matrices = zip(*matrices)
+        # print(matrices.device)
+        # matrices = matrices.to(self.device)
         # matrices = torch.nested.nested_tensor(list(matrices))
         batch_first = False if 'weight' in prefix else True
         
         # ranks = self.vmap_ranks(transpose, matrices)
-        for i, (name, matrix) in enumerate(matrices):
-            ranks = self.calculate_rank_via_svd(batch_first, matrix)
+        for i, (name, matrix) in enumerate(matrices.items()):
+            ranks = self.calculate_rank(batch_first, matrix)
             denom = matrix.T.size(0) if batch_first else matrix.size(0)
             
             name_dict = f'{prefix}/{name}{postfix}'
             name_dict_ratio = f'{prefix}_ratio/{name}{postfix}'
-            name_dict_null = f'{prefix}_null/{name}{postfix}'
+            # name_dict_null = f'{prefix}_null/{name}{postfix}'
             evaluators[name_dict] = ranks[0]
             evaluators[name_dict_ratio] = ranks[0] / denom # check if dim makes sense
-            evaluators[name_dict_null] = denom - ranks[0]
+            # evaluators[name_dict_null] = denom - ranks[0]
             
             name_dict_square_stable = f'{prefix}_square_stable/{name}{postfix}'
             name_dict_ratio_square_stable = f'{prefix}_ratio_square_stable/{name}{postfix}'
-            name_dict_null_square_stable = f'{prefix}_null_square_stable/{name}{postfix}'
+            # name_dict_null_square_stable = f'{prefix}_null_square_stable/{name}{postfix}'
             evaluators[name_dict_square_stable] = ranks[1]
             evaluators[name_dict_ratio_square_stable] = ranks[1] / denom # check if dim makes sense
-            evaluators[name_dict_null_square_stable] = denom - ranks[1]
+            # evaluators[name_dict_null_square_stable] = denom - ranks[1]
         return evaluators
 
     def calculate_rank(self, transpose, matrix): # jedyny pomysł to z paddingiem macierzy do maksymalnej
         matrix = matrix.T if transpose else matrix
-        # if matrix.size(0) > self.cutoff:
-        #     matrix = torch.index_select(matrix, 0, self.hooks_reprs.callback.subsampling[name].to(self.device))
-        cov_matrix = torch.cov(matrix) # torch.cov(B) = (B-\mi) @ (B-\mi).T / B.size(0)
-        rank = torch.linalg.matrix_rank(cov_matrix).item()
-        return rank
+        gramian_matrix = matrix @ matrix.T
+        rank = torch.linalg.matrix_rank(gramian_matrix).item()
+        square_stable_rank = torch.diag(gramian_matrix).sum() / torch.lobpcg(gramian_matrix, k=1)[0][0]
+        return rank, square_stable_rank
     
     def calculate_rank_via_svd(self, transpose, matrix): # jedyny pomysł to z paddingiem macierzy do maksymalnej
         matrix = matrix.T if transpose else matrix
-        cov_matrix = torch.cov(matrix)
+        cov_matrix = matrix#torch.cov(matrix)
         singulars = torch.linalg.svdvals(cov_matrix)
         rank = (singulars > (singulars[0] * max(cov_matrix.size()) * self.eps)).sum()
+        singulars = singulars ** 2
         square_stable_rank = singulars.sum() / (singulars[0] + self.eps)
         return rank, square_stable_rank
     
