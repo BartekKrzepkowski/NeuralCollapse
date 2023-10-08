@@ -36,53 +36,64 @@ def variance_cos(x_data, y_true, evaluators): # zamiast cos do średniej, rozwa�
 
 def variance_angle_pairwise(x_data, y_true, evaluators): # zamiast cos do średniej, rozważ między wszystkimi możliwymi wektorami
     eps = torch.finfo(torch.float32).eps
-    denom = y_true.shape[0]
     classes = np.unique(y_true.cpu().numpy())
     denom_class = classes.shape[0]
     for name, internal_repr in x_data.items():
         within_class_cov = 0.0
         between_class_cov = 0.0
-        general_mean = 0.0
-        within_class_angles = defaultdict(lambda: [])
-        between_class_angles = defaultdict(lambda: [])
-        within_class_mean = defaultdict(lambda: 0.0)
+        # within_class_angles = defaultdict(lambda: [])
+        # between_class_angles = defaultdict(lambda: [])
+        # within_class_mean = defaultdict(lambda: 0.0)
         for k in range(len(internal_repr)):
             internal_repr[k] /= (torch.norm(internal_repr[k]) + eps)
             
         cos = internal_repr @ internal_repr.T
         abs_angle_matrix = torch.abs(torch.acos(cos))
         
-        for i in range(len(classes)):
+        general_mean = torch.triu(abs_angle_matrix, diagonal=1)
+        general_mean = general_mean[general_mean.nonzero(as_tuple=True)].flatten().mean()
+        
+        for i in range(denom_class):
             idxs_i = np.where(y_true.cpu().numpy() == i)[0]
-            general_mean += abs_angle_matrix[idxs_i][:, idxs_i].sum()
-        
-        for i in range(abs_angle_matrix.shape[0]):
-            for j in range(abs_angle_matrix.shape[1]):
-                if i < j:
-                    # cos = sample1 @ sample2
-                    # abs_angle = torch.abs(torch.acos(cos)).item()
-                    abs_angle = abs_angle_matrix[i, j].item()
-                    general_mean += abs_angle
-                    if y_true[i] == y_true[j]:
-                        y_i = y_true[i].item()
-                        within_class_mean[y_i] += abs_angle
-                        within_class_angles[y_i].append(abs_angle)
-                    # else:
-                    #     between_class_angles[y_i].append(abs_angle)
-                    
-        general_mean /= (denom * (denom - 1) / 2)
-        within_class_mean = {k: v / len(within_class_angles[k]) for k, v in within_class_mean.items()}
-        
-        for c in within_class_mean:
-            within_class_cov_c = 0.0
-            for angle in within_class_angles[c]:
-                within_class_cov_c += (angle - within_class_mean[c]) ** 2
-            within_class_cov += (within_class_cov_c / len(within_class_angles[c]))
-            between_class_cov += ((general_mean - within_class_mean[c]) ** 2)
-            
-        within_class_cov /= len(within_class_mean)
-        between_class_cov /= len(within_class_mean)
+            sub_matrix = abs_angle_matrix[idxs_i][:, idxs_i]
+            sub_matrix = torch.triu(sub_matrix, diagonal=1)
+            sub_vector = sub_matrix[sub_matrix.nonzero(as_tuple=True)].flatten()
+            off_diag_mean = sub_vector.mean()
+            within_class_cov += (sub_vector - off_diag_mean).pow(2).mean().item()
+            between_class_cov += (off_diag_mean - general_mean).pow(2).item()
+
+        within_class_cov /= denom_class
+        between_class_cov /= denom_class
         total_class_cov = within_class_cov + between_class_cov
+        
+        
+        # for i in range(abs_angle_matrix.shape[0]):
+        #     for j in range(abs_angle_matrix.shape[1]):
+        #         if i < j:
+        #             # cos = sample1 @ sample2
+        #             # abs_angle = torch.abs(torch.acos(cos)).item()
+        #             abs_angle = abs_angle_matrix[i, j].item()
+        #             general_mean += abs_angle
+        #             if y_true[i] == y_true[j]:
+        #                 y_i = y_true[i].item()
+        #                 within_class_mean[y_i] += abs_angle
+        #                 within_class_angles[y_i].append(abs_angle)
+        #             # else:
+        #             #     between_class_angles[y_i].append(abs_angle)
+                    
+        # general_mean /= (denom * (denom - 1) / 2)
+        # within_class_mean = {k: v / len(within_class_angles[k]) for k, v in within_class_mean.items()}
+        
+        # for c in within_class_mean:
+        #     within_class_cov_c = 0.0
+        #     for angle in within_class_angles[c]:
+        #         within_class_cov_c += (angle - within_class_mean[c]) ** 2
+        #     within_class_cov += (within_class_cov_c / len(within_class_angles[c]))
+        #     between_class_cov += ((general_mean - within_class_mean[c]) ** 2)
+            
+        # within_class_cov /= len(within_class_mean)
+        # between_class_cov /= len(within_class_mean)
+        # total_class_cov = within_class_cov + between_class_cov
         
         evaluators[f'within_cov_normalized_abs_angle/{name}'] = within_class_cov / total_class_cov
         evaluators[f'between_cov_normalized_abs_angle/{name}'] = between_class_cov / total_class_cov
@@ -161,8 +172,8 @@ class TunnelGrad(torch.nn.Module):
     def forward(self, step, scope, phase):
         self.model.eval()
         DATASET_NAME = 'test_proper'
-        x_test = torch.cat([x for x, _ in self.loaders[DATASET_NAME]], dim=0).to(self.device)#[:5000]
-        y_test = torch.cat([y for _, y in self.loaders[DATASET_NAME]], dim=0).to(self.device)#[:5000]
+        x_test = torch.cat([x for x, _ in self.loaders[DATASET_NAME]], dim=0).to(self.device)
+        y_test = torch.cat([y for _, y in self.loaders[DATASET_NAME]], dim=0).to(self.device)
         classes = np.unique(y_test.cpu().numpy())
         prefix = lambda a, b : f'ranks_grads_{a}_{b}'
         postfix = f'____{scope}____{phase}'
@@ -172,7 +183,7 @@ class TunnelGrad(torch.nn.Module):
         idxs = []
         for i in range(len(classes)):
             idxs_i = np.where(y_test.cpu().numpy() == i)[0]
-            sampled_idxs_i = np.random.choice(idxs_i, size=750, replace=False)
+            sampled_idxs_i = np.random.choice(idxs_i, size=500, replace=False)
             idxs.append(sampled_idxs_i)
         
         idxs = np.concatenate(idxs)
@@ -202,12 +213,12 @@ class TunnelGrad(torch.nn.Module):
         # self.prepare_variables(per_sample_grads, concatenated_grads)
         # self.sample_feats(per_sample_grads)
             
-        # evaluators = self.prepare_and_calculate_ranks(per_sample_grads, evaluators, prefix('nonnormalized', 'feature'), postfix, normalize=False, batch_first=False, risky_names=('concatenated_grads'))
+        evaluators = self.prepare_and_calculate_ranks(per_sample_grads, evaluators, prefix('nonnormalized', 'feature'), postfix, normalize=False, batch_first=False, risky_names=('concatenated_grads'))
         # evaluators = self.prepare_and_calculate_ranks(per_sample_grads, evaluators, prefix('nonnormalized', 'batch'), postfix, normalize=False, batch_first=True, risky_names=('concatenated_grads'))
         # evaluators = self.prepare_and_calculate_ranks(per_sample_grads, evaluators, prefix('normalized', 'feature'), postfix, normalize=True, batch_first=False, risky_names=('concatenated_grads'))
         # evaluators = self.prepare_and_calculate_ranks(per_sample_grads, evaluators, prefix('normalized', 'batch'), postfix, normalize=True, batch_first=True, risky_names=('concatenated_grads'))
         
-        variance_angle_pairwise(per_sample_grads, y_test, evaluators)
+        # variance_angle_pairwise(per_sample_grads, y_test, evaluators)
         
         self.model.train()
         evaluators['steps/tunnel_grads'] = step
