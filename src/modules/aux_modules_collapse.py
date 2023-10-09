@@ -65,17 +65,17 @@ def variance_eucl(x_data, y_true, evaluators):
         normalized_wcc = trace_wcc / (trace_tcc + eps) 
         normalized_bcc = trace_bcc / (trace_tcc + eps)
         
-        evaluators[f'within_cov_normalized_eucl/{name}'] = normalized_wcc
-        evaluators[f'between_cov_normalized_eucl/{name}'] = normalized_bcc
+        evaluators[f'within_cov_normalized_eucl/{name}'] = normalized_wcc.item()
+        evaluators[f'between_cov_normalized_eucl/{name}'] = normalized_bcc.item()
         
         
         rank_wcc = torch.linalg.matrix_rank(within_class_cov)
         rank_bcc = torch.linalg.matrix_rank(between_class_cov)
         rank_tcc = torch.linalg.matrix_rank(total_class_cov)
         
-        evaluators[f'within_cov_rank/{name}'] = rank_wcc
-        evaluators[f'between_cov_rank/{name}'] = rank_bcc
-        evaluators[f'total_cov_rank/{name}'] = rank_tcc
+        evaluators[f'within_cov_rank/{name}'] = rank_wcc.item()
+        evaluators[f'between_cov_rank/{name}'] = rank_bcc.item()
+        evaluators[f'total_cov_rank/{name}'] = rank_tcc.item()
         
         A = within_class_cov.T @ within_class_cov
         square_stable_rank_wcc = torch.diag(A).sum() / torch.lobpcg(A, k=1)[0][0]
@@ -84,9 +84,9 @@ def variance_eucl(x_data, y_true, evaluators):
         C = total_class_cov.T @ total_class_cov
         square_stable_rank_wcc = torch.diag(C).sum() / torch.lobpcg(C, k=1)[0][0]
         
-        evaluators[f'within_cov_square_stable_rank/{name}'] = square_stable_rank_wcc
-        evaluators[f'between_cov_square_stable_rank/{name}'] = square_stable_rank_wcc
-        evaluators[f'total_cov_square_stable_rank/{name}'] = square_stable_rank_wcc
+        evaluators[f'within_cov_square_stable_rank/{name}'] = square_stable_rank_wcc.item()
+        evaluators[f'between_cov_square_stable_rank/{name}'] = square_stable_rank_wcc.item()
+        evaluators[f'total_cov_square_stable_rank/{name}'] = square_stable_rank_wcc.item()
 
 
 import torch
@@ -229,7 +229,7 @@ class TunnelGrad(torch.nn.Module):
         matrix = matrix if batch_first else matrix.T
         gramian_matrix = matrix @ matrix.T
         rank = torch.linalg.matrix_rank(gramian_matrix).item()
-        square_stable_rank = torch.diag(gramian_matrix).sum() / torch.lobpcg(gramian_matrix, k=1)[0][0]
+        square_stable_rank = (torch.diag(gramian_matrix).sum() / torch.lobpcg(gramian_matrix, k=1)[0][0]).item()
         return rank, square_stable_rank
     
         

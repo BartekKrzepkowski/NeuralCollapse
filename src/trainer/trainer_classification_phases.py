@@ -100,7 +100,7 @@ class TrainerClassification:
             self.model.eval()
             with torch.no_grad():
                 self.run_epoch(phase='test_proper', config=config)
-                self.run_epoch(phase='test_blurred', config=config)
+                # self.run_epoch(phase='test_blurred', config=config)
                 
             self.timer.log(epoch)
 

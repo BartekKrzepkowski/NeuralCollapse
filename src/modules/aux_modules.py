@@ -44,8 +44,8 @@ class TunnelandProbing(torch.nn.Module):
         # calculate ranks
         postfix = f'____{scope}____{phase}'
         named_weights = {n: p.reshape(p.size(0), -1) for n, p in self.model.named_parameters() if 'weight' in n}
-        evaluators = self.prepare_and_calculate_ranks(internal_representations_test, evaluators, prefix=f'ranks_representations', postfix=postfix)
-        evaluators = self.prepare_and_calculate_ranks(named_weights, evaluators, prefix=f'ranks_weights', postfix=postfix)
+        # evaluators = self.prepare_and_calculate_ranks(internal_representations_test, evaluators, prefix=f'ranks_representations', postfix=postfix)
+        # evaluators = self.prepare_and_calculate_ranks(named_weights, evaluators, prefix=f'ranks_weights', postfix=postfix)
         
         variance_eucl(internal_representations_test, y_test, evaluators)
         
@@ -109,7 +109,7 @@ class TunnelandProbing(torch.nn.Module):
         matrix = matrix.T if transpose else matrix
         gramian_matrix = matrix @ matrix.T
         rank = torch.linalg.matrix_rank(gramian_matrix).item()
-        square_stable_rank = torch.diag(gramian_matrix).sum() / torch.lobpcg(gramian_matrix, k=1)[0][0]
+        square_stable_rank = (torch.diag(gramian_matrix).sum() / torch.lobpcg(gramian_matrix, k=1)[0][0]).item()
         return rank, square_stable_rank
     
     def calculate_rank_via_svd(self, transpose, matrix): # jedyny pomysł to z paddingiem macierzy do maksymalnej

@@ -207,5 +207,5 @@ if __name__ == "__main__":
     lr = float(sys.argv[1])
     wd = 1e-4 * 1e-1 / lr
     lr_lambda = 1.0
-    EPOCHS = 200
+    EPOCHS = 300
     objective('just_run', EPOCHS, lr, wd, lr_lambda)
