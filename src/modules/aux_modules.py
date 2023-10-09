@@ -8,6 +8,7 @@ from torch.distributions import Categorical
 from src.utils import prepare
 from src.utils.utils_optim import get_every_but_forbidden_parameter_names, FORBIDDEN_LAYER_TYPES
 from src.utils.utils_metrics import correct_metric
+from src.modules.aux_modules_collapse import variance_eucl
 
 from functorch import combine_state_for_ensemble
 from torch.func import functional_call, vmap, grad 
@@ -33,7 +34,7 @@ class TunnelandProbing(torch.nn.Module):
         self.model.eval()
         DATASET_NAME = 'test_proper'
         x_test = torch.cat([x for x, _ in self.loaders[DATASET_NAME]], dim=0).to(self.device)
-        # y_test = torch.cat([y for _, y in self.loaders[DATASET_NAME]], dim=0).to(self.device)
+        y_test = torch.cat([y for _, y in self.loaders[DATASET_NAME]], dim=0).to(self.device)
         with torch.no_grad():
             _ = self.model(x_test)
         internal_representations_test = self.hooks_reprs.get_assets()  # (B, D)
@@ -45,6 +46,8 @@ class TunnelandProbing(torch.nn.Module):
         named_weights = {n: p.reshape(p.size(0), -1) for n, p in self.model.named_parameters() if 'weight' in n}
         evaluators = self.prepare_and_calculate_ranks(internal_representations_test, evaluators, prefix=f'ranks_representations', postfix=postfix)
         evaluators = self.prepare_and_calculate_ranks(named_weights, evaluators, prefix=f'ranks_weights', postfix=postfix)
+        
+        variance_eucl(internal_representations_test, y_test, evaluators)
         
         # # prepare heads
         # input_dims = [representation.size(1) for representation in internal_representations_test]
