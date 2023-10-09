@@ -33,8 +33,16 @@ def variance_angle_pairwise(x_data, y_true, evaluators): # zamiast cos do średn
         between_class_cov /= denom_class
         total_class_cov = within_class_cov + between_class_cov
         
-        evaluators[f'within_cov_normalized_abs_angle/{name}'] = within_class_cov / total_class_cov
-        evaluators[f'between_cov_normalized_abs_angle/{name}'] = between_class_cov / total_class_cov
+        evaluators[f'within_cov_abs_angle/{name}'] = within_class_cov
+        evaluators[f'between_cov_abs_angle/{name}'] = between_class_cov
+        evaluators[f'total_cov_abs_angle/{name}'] = total_class_cov
+        
+        normalized_wcc = within_class_cov / (total_class_cov + eps) 
+        normalized_bcc = between_class_cov / (total_class_cov + eps)
+        
+        
+        evaluators[f'within_cov_abs_angle_normalized/{name}'] = normalized_wcc
+        evaluators[f'between_cov_abs_angle_normalized/{name}'] = normalized_bcc
     return evaluators
 
 
@@ -62,11 +70,15 @@ def variance_eucl(x_data, y_true, evaluators):
         trace_bcc = torch.trace(between_class_cov)
         trace_tcc = torch.trace(total_class_cov)
         
+        evaluators[f'within_cov_eucl/{name}'] = trace_wcc.item()
+        evaluators[f'between_cov_eucl/{name}'] = trace_bcc.item()
+        evaluators[f'total_cov_eucl/{name}'] = trace_tcc.item()
+        
         normalized_wcc = trace_wcc / (trace_tcc + eps) 
         normalized_bcc = trace_bcc / (trace_tcc + eps)
         
-        evaluators[f'within_cov_normalized_eucl/{name}'] = normalized_wcc.item()
-        evaluators[f'between_cov_normalized_eucl/{name}'] = normalized_bcc.item()
+        evaluators[f'within_cov_eucl_normalized/{name}'] = normalized_wcc.item()
+        evaluators[f'between_cov_eucl_normalized/{name}'] = normalized_bcc.item()
         
         
         rank_wcc = torch.linalg.matrix_rank(within_class_cov)
