@@ -53,12 +53,19 @@ def variance_eucl(x_data, y_true, evaluators):
     for name, internal_repr in x_data.items():
         within_class_cov = 0.0
         between_class_cov = 0.0
-        general_mean = torch.mean(internal_repr, dim=0, keepdim=True)  # (1, D)
+        general_mean = torch.mean(internal_repr, dim=0, keepdim=True).detach()  # (1, D)
         for c in classes:
-            class_internal_repr = internal_repr[y_true == c]
+            class_internal_repr = internal_repr[y_true == c].detach()
             class_mean = torch.mean(class_internal_repr, dim=0, keepdim=True)  # (1, D)
             class_internal_repr_sub = class_internal_repr - class_mean  # (N_c, D)
-            within_class_cov += (class_internal_repr_sub.unsqueeze(2) @ class_internal_repr_sub.unsqueeze(1)).mean(dim=0)  # (N_c, D, 1) x (N_c, 1, D) -> (D, D)
+            # print(class_internal_repr_sub.shape)
+            # for sample in class_internal_repr_sub:
+            #     within_class_cov += sample.unsqueeze(1) @ sample.unsqueeze(0)
+            # within_class_cov = (class_internal_repr_sub.unsqueeze(2) @ class_internal_repr_sub.unsqueeze(1)).mean(dim=0)  # (N_c, D, 1) x (N_c, 1, D) -> (D, D)
+            
+            S = 250 # depends on GPU available (GB)
+            K = class_internal_repr_sub.shape[0] // S
+            within_class_cov += sum([(class_internal_repr_sub[S*i:S*(i+1)].unsqueeze(2) @ class_internal_repr_sub[S*i:S*(i+1)].unsqueeze(1)).mean(dim=0) for i in range(K)]) / K
             between_sample = (class_mean - general_mean)
             between_class_cov += between_sample.T @ between_sample  # (D, 1) x (1, D) -> (D, D)
         
@@ -90,11 +97,11 @@ def variance_eucl(x_data, y_true, evaluators):
         evaluators[f'total_cov_rank/{name}'] = rank_tcc.item()
         
         A = within_class_cov.T @ within_class_cov
-        square_stable_rank_wcc = torch.diag(A).sum() / torch.lobpcg(A, k=1)[0][0]
+        square_stable_rank_wcc = torch.diag(A).sum() #/ torch.lobpcg(A, k=1)[0][0]
         B = between_class_cov.T @ between_class_cov
-        square_stable_rank_wcc = torch.diag(A).sum() / torch.lobpcg(B, k=1)[0][0]
+        square_stable_rank_wcc = torch.diag(B).sum() #/ torch.lobpcg(B, k=1)[0][0]
         C = total_class_cov.T @ total_class_cov
-        square_stable_rank_wcc = torch.diag(C).sum() / torch.lobpcg(C, k=1)[0][0]
+        square_stable_rank_wcc = torch.diag(C).sum() #/ torch.lobpcg(C, k=1)[0][0]
         
         evaluators[f'within_cov_square_stable_rank/{name}'] = square_stable_rank_wcc.item()
         evaluators[f'between_cov_square_stable_rank/{name}'] = square_stable_rank_wcc.item()
@@ -241,7 +248,7 @@ class TunnelGrad(torch.nn.Module):
         matrix = matrix if batch_first else matrix.T
         gramian_matrix = matrix @ matrix.T
         rank = torch.linalg.matrix_rank(gramian_matrix).item()
-        square_stable_rank = (torch.diag(gramian_matrix).sum() / torch.lobpcg(gramian_matrix, k=1)[0][0]).item()
+        square_stable_rank = (torch.diag(gramian_matrix).sum()).item() #/ torch.lobpcg(gramian_matrix, k=1)[0][0]).item()
         return rank, square_stable_rank
     
         

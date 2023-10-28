@@ -8,9 +8,11 @@ else
   conda activate ncollapse
   mkdir pip-build
 
-  conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia --yes
+  TMPDIR=pip-build pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
   conda install -c conda-forge scikit-learn seaborn --yes
   conda install -c conda-forge clearml wandb tensorboard --yes
   conda install -c conda-forge tqdm omegaconf --yes
+  
+  rm -rf pip-build
   conda env export | grep -v "^prefix: " > environment.yml
 fi
